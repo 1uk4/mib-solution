@@ -56,12 +56,27 @@ _CACHE_CREATED = False
 _SHARPEN_ENABLED = os.environ.get("MIB_OCR_SHARPEN", "") == "1"
 
 
+_USER_WORDS_ENABLED = os.environ.get("MIB_USER_WORDS", "") == "1"
+_USER_WORDS_PATH = Path(__file__).parent / "data" / "tesseract_user_words.txt"
+
+
+def _user_words_flags() -> list[str]:
+    """Return tesseract flags for the user-words dictionary, or [] if
+    disabled or the file is missing."""
+    if not _USER_WORDS_ENABLED:
+        return []
+    if not _USER_WORDS_PATH.exists():
+        return []
+    return ["--user-words", str(_USER_WORDS_PATH)]
+
+
 def _cache_config_tag() -> str:
     """Suffix appended to cache tags so runs with different OCR config
     (user-words on/off, other future flags) do not collide.
     Order: alphabetical by env-var short-name. Extend when new flags land."""
     parts = []
-    # Task 5 will append 'uw' here when _USER_WORDS_ENABLED
+    if _USER_WORDS_ENABLED:
+        parts.append("uw")
     return ("_" + "_".join(parts)) if parts else ""
 
 
@@ -271,11 +286,12 @@ def _sharpen_png(image_bytes: bytes) -> bytes | None:
 
 def _ocr_image(image_bytes: bytes) -> str:
     """Baseline single-pass OCR (psm=6). Content-hash cached."""
-    cached = _cache_get(image_bytes)
+    tag = _cache_config_tag()
+    cached = _cache_get(image_bytes, tag=tag)
     if cached is not None:
         return cached
-    result = _tesseract(image_bytes, psm=6)
-    _cache_put(image_bytes, result)
+    result = _tesseract(image_bytes, psm=6, extra_flags=_user_words_flags())
+    _cache_put(image_bytes, result, tag=tag)
     return result
 
 
@@ -298,14 +314,15 @@ def _ocr_image_dual(image_bytes: bytes) -> str:
     Cached under a "_dual" suffix so single-pass cache entries for the
     same image stay valid for callers that use `_ocr_image` directly.
     """
-    cached = _cache_get(image_bytes, tag="_dual")
+    tag = "_dual" + _cache_config_tag()
+    cached = _cache_get(image_bytes, tag=tag)
     if cached is not None:
         return cached
-    text_base = _tesseract(image_bytes, psm=6)
+    text_base = _tesseract(image_bytes, psm=6, extra_flags=_user_words_flags())
     upscaled = _upscale_png(image_bytes, scale=2)
-    text_hires = _tesseract(upscaled, psm=3) if upscaled else ""
+    text_hires = _tesseract(upscaled, psm=3, extra_flags=_user_words_flags()) if upscaled else ""
     result = text_base + "\n" + text_hires if text_hires else text_base
-    _cache_put(image_bytes, result, tag="_dual")
+    _cache_put(image_bytes, result, tag=tag)
     return result
 
 
@@ -323,11 +340,11 @@ def _ocr_image_triple(image_bytes: bytes) -> str:
     cached = _cache_get(image_bytes, tag=cache_tag)
     if cached is not None:
         return cached
-    text_base = _tesseract(image_bytes, psm=6)
+    text_base = _tesseract(image_bytes, psm=6, extra_flags=_user_words_flags())
     upscaled = _upscale_png(image_bytes, scale=2)
-    text_hires = _tesseract(upscaled, psm=3) if upscaled else ""
+    text_hires = _tesseract(upscaled, psm=3, extra_flags=_user_words_flags()) if upscaled else ""
     sharpened = _sharpen_png(image_bytes)
-    text_sharp = _tesseract(sharpened, psm=6) if sharpened else ""
+    text_sharp = _tesseract(sharpened, psm=6, extra_flags=_user_words_flags()) if sharpened else ""
     parts = [t for t in (text_base, text_hires, text_sharp) if t]
     result = "\n".join(parts)
     _cache_put(image_bytes, result, tag=cache_tag)
