@@ -36,9 +36,11 @@ import os
 from v1.solution import extract_fields, DISQUALIFYING_FLAGS, REVIEW_ONLY_FLAGS
 from v3.acquire import Source, TEXT_STREAM, IMAGE
 from v3.normalize import value as _normalize_value
+from v3.reocr import repair as _reocr_repair
 from v3.source_type import classify as classify_source
 
 _NORMALIZE_ENABLED = os.environ.get("MIB_NORMALIZE_VALUES", "") == "1"
+_REOCR_ENABLED = os.environ.get("MIB_CHAR_WHITELIST_REOCR", "") == "1"
 
 
 def _norm(key: str, raw: str) -> str:
@@ -47,6 +49,16 @@ def _norm(key: str, raw: str) -> str:
     if _NORMALIZE_ENABLED and raw:
         return _normalize_value(key, raw)
     return raw
+
+
+def _norm_and_repair(key: str, raw: str, source: "Source") -> str:
+    """Normalize; if a structured field still fails validation, char-whitelist re-OCR."""
+    normed = _norm(key, raw)
+    if _REOCR_ENABLED and key in ("sponsor_id", "arrival_date"):
+        repaired = _reocr_repair(source, key, normed)
+        if repaired:
+            return repaired
+    return normed
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +433,7 @@ def _fuzzy_label_signals(
         if not _valid_field_value(key, value):
             continue
         signals.append(Signal(
-            type=FIELD_VALUE, key=key, value=_norm(key, value),
+            type=FIELD_VALUE, key=key, value=_norm_and_repair(key, value, img_src),
             source_id=img_src.id, confidence=conf,
             tag=f"image_ocr_fuzzy_{key}:{value[:20]}",
         ))
@@ -516,7 +528,7 @@ def extract_signals(sources: list[Source]) -> dict:
             if not _valid_field_value(key, value):
                 continue
             signals.append(Signal(
-                type=FIELD_VALUE, key=key, value=_norm(key, value),
+                type=FIELD_VALUE, key=key, value=_norm_and_repair(key, value, txt_src),
                 source_id=txt_src.id, confidence=conf,
                 tag=f"text_stream_L{level}:{key}",
             ))
@@ -535,7 +547,7 @@ def extract_signals(sources: list[Source]) -> dict:
             if not _valid_field_value(key, value):
                 continue
             signals.append(Signal(
-                type=FIELD_VALUE, key=key, value=_norm(key, value),
+                type=FIELD_VALUE, key=key, value=_norm_and_repair(key, value, img_src),
                 source_id=img_src.id, confidence=conf,
                 tag=f"image_ocr_L{level}:{key}",
             ))
@@ -549,7 +561,7 @@ def extract_signals(sources: list[Source]) -> dict:
             fuzzy = _fuzzy_flags_from_ocr(img_src.content)
             if fuzzy:
                 signals.append(Signal(
-                    type=FIELD_VALUE, key="risk_flags", value=_norm("risk_flags", fuzzy),
+                    type=FIELD_VALUE, key="risk_flags", value=_norm_and_repair("risk_flags", fuzzy, img_src),
                     source_id=img_src.id, confidence=0.6,
                     tag=f"image_ocr_fuzzy_flag:{fuzzy}",
                 ))
@@ -562,7 +574,7 @@ def extract_signals(sources: list[Source]) -> dict:
             fuzzy_spn = _fuzzy_extract_sponsor(img_src.content)
             if fuzzy_spn and _valid_field_value("sponsor_id", fuzzy_spn):
                 signals.append(Signal(
-                    type=FIELD_VALUE, key="sponsor_id", value=_norm("sponsor_id", fuzzy_spn),
+                    type=FIELD_VALUE, key="sponsor_id", value=_norm_and_repair("sponsor_id", fuzzy_spn, img_src),
                     source_id=img_src.id, confidence=0.6,
                     tag="image_ocr_fuzzy_sponsor",
                 ))
