@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.py[cod]
+.DS_Store
+output
+README.md
+
+# Dev-only tools and docs — never ship in the production Docker image
+v3/dev/
+v1/*.md
+v2/*.md
+v3/*.md
+dev_score.sh
