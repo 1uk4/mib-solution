@@ -91,6 +91,43 @@ Actions after investigation:
 
 ---
 
+## 2026-07-31 — OCR value quality bundle
+
+Prior baseline (2026-07-30, before Tasks 3-6): 103.48 / 150 total, 22 catastrophic FAs.
+
+Measurement sweep on 1000 training PDFs (seed=42, native, cached).
+Baseline and normalize-alone configs were auto-pruned by dev_score.sh's 60-min
+housekeeping and are not included in the table; per-feature attribution for
+normalize is inferred from the "all four" vs "sharpen alone" delta.
+
+| Config | Total | Δ vs baseline | cat_fa | Extract | Classif | Calibr |
+|---|---|---|---|---|---|---|
+| Prior baseline | 103.48 | — | 22 | 34.46 | 56.12 | 12.90 |
+| sharpen alone | 113.75 | +10.27 | 15 | 39.97 | 60.17 | 13.61 |
+| user-words alone | 113.33 | +9.85 | 15 | 39.96 | 59.81 | 13.55 |
+| re-OCR alone | 113.12 | +9.64 | 15 | 39.82 | 59.75 | 13.55 |
+| **all four bundled** | **114.19** | **+10.71** | **15** | **40.16** | **60.36** | **13.67** |
+
+Confusion-cell shift (baseline → all-four):
+- APPROVED→APPROVED: 132 → 114 (-18) — more correct approves downgraded to REVIEW
+- APPROVED→REVIEW:   157 → 172 (+15)
+- DENIED→DENIED:     254 → 332 (+78) — big gain, mostly via cat_fa reduction (22→15) and D→R shift
+- DENIED→REVIEW:     155 →  84 (-71)
+- DENIED→APPROVED:    22 →  15 (-7) — catastrophic FA reduction
+- REVIEW→REVIEW:     244 → 248 (+4)
+- REVIEW→APPROVED:    36 →  28 (-8)
+
+Net: -18 lost correct approves, +78 correct denies, -7 catastrophic FAs. Strong positive trade-off.
+
+**Rollout decision:** ship all four features default-on. Module-level defaults in
+`v3/extract.py` and `v3/signals.py` flipped from `os.environ.get("MIB_X", "") == "1"`
+to `os.environ.get("MIB_X", "1") != "0"` — unset or truthy = on, explicit "0" = off.
+
+Spec: `docs/superpowers/specs/2026-07-31-ocr-value-quality-design.md`
+Plan: `docs/superpowers/plans/2026-07-31-ocr-value-quality.md`
+
+---
+
 ## When we do the audit
 
 Once L5 emits typed Signals with cross-reference conflict detection:

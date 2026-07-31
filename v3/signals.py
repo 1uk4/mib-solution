@@ -39,8 +39,8 @@ from v3.normalize import value as _normalize_value
 from v3.reocr import repair as _reocr_repair
 from v3.source_type import classify as classify_source
 
-_NORMALIZE_ENABLED = os.environ.get("MIB_NORMALIZE_VALUES", "") == "1"
-_REOCR_ENABLED = os.environ.get("MIB_CHAR_WHITELIST_REOCR", "") == "1"
+_NORMALIZE_ENABLED = os.environ.get("MIB_NORMALIZE_VALUES", "1") != "0"
+_REOCR_ENABLED = os.environ.get("MIB_CHAR_WHITELIST_REOCR", "1") != "0"
 
 
 def _norm(key: str, raw: str) -> str:
