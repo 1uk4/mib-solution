@@ -37,9 +37,10 @@ from v1.solution import _decode_stream, TEXT_OP_RE, _pdf_unescape
 from v3.acquire import Source, TEXT_STREAM, IMAGE
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageFilter
 except ImportError:
     Image = None
+    ImageFilter = None
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +50,19 @@ except ImportError:
 # Env var set by dev tooling. Unset in production → cache is a no-op.
 _CACHE_DIR = os.environ.get("MIB_OCR_CACHE_DIR", "").strip() or None
 _CACHE_CREATED = False
+
+# When set to "1", extract_content uses triple-pass OCR (baseline + upscaled + sharpened).
+# Default off so production submissions are unaffected until the flag is enabled.
+_SHARPEN_ENABLED = os.environ.get("MIB_OCR_SHARPEN", "") == "1"
+
+
+def _cache_config_tag() -> str:
+    """Suffix appended to cache tags so runs with different OCR config
+    (user-words on/off, other future flags) do not collide.
+    Order: alphabetical by env-var short-name. Extend when new flags land."""
+    parts = []
+    # Task 5 will append 'uw' here when _USER_WORDS_ENABLED
+    return ("_" + "_".join(parts)) if parts else ""
 
 
 def _cache_path(image_bytes: bytes, tag: str = "") -> Path | None:
@@ -173,7 +187,10 @@ def extract_content(sources: list[Source]) -> list[Source]:
             src.content = _extract_text_stream(src)
         elif src.type == IMAGE and _should_ocr(src):
             if _looks_like_document(src):
-                src.content = _ocr_image_dual(src.raw)
+                if _SHARPEN_ENABLED:
+                    src.content = _ocr_image_triple(src.raw)
+                else:
+                    src.content = _ocr_image_dual(src.raw)
             else:
                 src.content = _ocr_image(src.raw)
     return sources
@@ -194,11 +211,20 @@ def _extract_text_stream(src: Source) -> str:
     return "\n".join(pieces)
 
 
-def _tesseract(image_bytes: bytes, psm: int = 6) -> str:
-    """Single Tesseract invocation. Returns text or empty on failure."""
+def _tesseract(image_bytes: bytes, psm: int = 6,
+               extra_flags: list[str] | None = None) -> str:
+    """Single Tesseract invocation. Returns text or empty on failure.
+
+    `extra_flags` — additional CLI flags to pass after the psm arg. Used by:
+      - user-words dictionary: ['--user-words', '/path/to/words.txt']
+      - char-whitelist re-OCR: ['-c', 'tessedit_char_whitelist=SPN-0123456789']
+    """
+    cmd = ["tesseract", "-", "-", "--psm", str(psm)]
+    if extra_flags:
+        cmd.extend(extra_flags)
     try:
         proc = subprocess.run(
-            ["tesseract", "-", "-", "--psm", str(psm)],
+            cmd,
             input=image_bytes,
             capture_output=True,
             timeout=15,
@@ -216,6 +242,26 @@ def _upscale_png(image_bytes: bytes, scale: int) -> bytes | None:
         img = Image.open(io.BytesIO(image_bytes))
         img.load()
         img = img.resize((img.width * scale, img.height * scale), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return None
+
+
+def _sharpen_png(image_bytes: bytes) -> bytes | None:
+    """Apply unsharp mask sharpen, re-encode as PNG. None on failure.
+
+    Empirical basis: on MIB-000032, sharpen recovered 'Asinax Qommora' where
+    baseline read 'Annax Qormora' — 1 character closer to truth 'Arinax'.
+    Radius=2, percent=150 matches the parameters tested during design.
+    """
+    if Image is None:
+        return None
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.load()
+        img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         return buf.getvalue()
@@ -260,4 +306,29 @@ def _ocr_image_dual(image_bytes: bytes) -> str:
     text_hires = _tesseract(upscaled, psm=3) if upscaled else ""
     result = text_base + "\n" + text_hires if text_hires else text_base
     _cache_put(image_bytes, result, tag="_dual")
+    return result
+
+
+def _ocr_image_triple(image_bytes: bytes) -> str:
+    """Triple-pass OCR: baseline + upscaled + sharpened.
+
+    Extends _ocr_image_dual with a third pass on a sharpened variant.
+    Sharpen recovers character-level misreads (Annax→Asinax class) by
+    boosting edge contrast before Tesseract sees the image.
+
+    Cached under a "_triple" suffix (plus config tag) so single-pass and
+    dual-pass cache entries stay valid for their respective callers.
+    """
+    cache_tag = "_triple" + _cache_config_tag()
+    cached = _cache_get(image_bytes, tag=cache_tag)
+    if cached is not None:
+        return cached
+    text_base = _tesseract(image_bytes, psm=6)
+    upscaled = _upscale_png(image_bytes, scale=2)
+    text_hires = _tesseract(upscaled, psm=3) if upscaled else ""
+    sharpened = _sharpen_png(image_bytes)
+    text_sharp = _tesseract(sharpened, psm=6) if sharpened else ""
+    parts = [t for t in (text_base, text_hires, text_sharp) if t]
+    result = "\n".join(parts)
+    _cache_put(image_bytes, result, tag=cache_tag)
     return result
