@@ -31,9 +31,22 @@ from datetime import date as Date
 
 from difflib import SequenceMatcher
 
+import os
+
 from v1.solution import extract_fields, DISQUALIFYING_FLAGS, REVIEW_ONLY_FLAGS
 from v3.acquire import Source, TEXT_STREAM, IMAGE
+from v3.normalize import value as _normalize_value
 from v3.source_type import classify as classify_source
+
+_NORMALIZE_ENABLED = os.environ.get("MIB_NORMALIZE_VALUES", "") == "1"
+
+
+def _norm(key: str, raw: str) -> str:
+    """Env-gated normalizer wrapper. When MIB_NORMALIZE_VALUES=1, apply
+    field-specific normalization; otherwise pass value through untouched."""
+    if _NORMALIZE_ENABLED and raw:
+        return _normalize_value(key, raw)
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -408,7 +421,7 @@ def _fuzzy_label_signals(
         if not _valid_field_value(key, value):
             continue
         signals.append(Signal(
-            type=FIELD_VALUE, key=key, value=value,
+            type=FIELD_VALUE, key=key, value=_norm(key, value),
             source_id=img_src.id, confidence=conf,
             tag=f"image_ocr_fuzzy_{key}:{value[:20]}",
         ))
@@ -478,7 +491,7 @@ def extract_signals(sources: list[Source]) -> dict:
         if key == "fee_status" and value == "unknown":
             conf = 0.4
         signals.append(Signal(
-            type=FIELD_VALUE, key=key, value=value,
+            type=FIELD_VALUE, key=key, value=_norm(key, value),
             source_id="combined_text", confidence=conf,
             tag=f"v1_extract_fields:{key}",
         ))
@@ -503,7 +516,7 @@ def extract_signals(sources: list[Source]) -> dict:
             if not _valid_field_value(key, value):
                 continue
             signals.append(Signal(
-                type=FIELD_VALUE, key=key, value=value,
+                type=FIELD_VALUE, key=key, value=_norm(key, value),
                 source_id=txt_src.id, confidence=conf,
                 tag=f"text_stream_L{level}:{key}",
             ))
@@ -522,7 +535,7 @@ def extract_signals(sources: list[Source]) -> dict:
             if not _valid_field_value(key, value):
                 continue
             signals.append(Signal(
-                type=FIELD_VALUE, key=key, value=value,
+                type=FIELD_VALUE, key=key, value=_norm(key, value),
                 source_id=img_src.id, confidence=conf,
                 tag=f"image_ocr_L{level}:{key}",
             ))
@@ -536,7 +549,7 @@ def extract_signals(sources: list[Source]) -> dict:
             fuzzy = _fuzzy_flags_from_ocr(img_src.content)
             if fuzzy:
                 signals.append(Signal(
-                    type=FIELD_VALUE, key="risk_flags", value=fuzzy,
+                    type=FIELD_VALUE, key="risk_flags", value=_norm("risk_flags", fuzzy),
                     source_id=img_src.id, confidence=0.6,
                     tag=f"image_ocr_fuzzy_flag:{fuzzy}",
                 ))
@@ -549,7 +562,7 @@ def extract_signals(sources: list[Source]) -> dict:
             fuzzy_spn = _fuzzy_extract_sponsor(img_src.content)
             if fuzzy_spn and _valid_field_value("sponsor_id", fuzzy_spn):
                 signals.append(Signal(
-                    type=FIELD_VALUE, key="sponsor_id", value=fuzzy_spn,
+                    type=FIELD_VALUE, key="sponsor_id", value=_norm("sponsor_id", fuzzy_spn),
                     source_id=img_src.id, confidence=0.6,
                     tag="image_ocr_fuzzy_sponsor",
                 ))

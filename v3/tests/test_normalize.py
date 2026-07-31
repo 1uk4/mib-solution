@@ -118,3 +118,24 @@ class TestFreeForm:
 
     def test_declared_purpose_no_snap(self):
         assert value("declared_purpose", "xenobotany") == "xenobotany"
+
+
+import os
+
+
+class TestGating:
+    def test_normalize_gate_off(self, monkeypatch):
+        """With MIB_NORMALIZE_VALUES=0, signals.py must not normalize."""
+        monkeypatch.setenv("MIB_NORMALIZE_VALUES", "0")
+        # Re-import to pick up env
+        import importlib, v3.signals
+        importlib.reload(v3.signals)
+        assert v3.signals._NORMALIZE_ENABLED is False
+        assert v3.signals._norm("home_world", "Wolf-106 1c.") == "Wolf-106 1c."
+
+    def test_normalize_gate_on(self, monkeypatch):
+        monkeypatch.setenv("MIB_NORMALIZE_VALUES", "1")
+        import importlib, v3.signals
+        importlib.reload(v3.signals)
+        assert v3.signals._NORMALIZE_ENABLED is True
+        assert v3.signals._norm("home_world", "Wolf-106 1c.") == "Wolf-1061c"
