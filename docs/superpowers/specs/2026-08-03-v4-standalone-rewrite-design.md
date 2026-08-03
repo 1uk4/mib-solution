@@ -330,6 +330,16 @@ exception. A crashed packet and an under-extracted packet are different populati
 sharing a calibration bucket has no measured justification. *Proposed counterfactual:
 measure empirical accuracy of the exception path separately.*
 
+**B2-4 — OCR engine version sensitivity.** 145 of 1000 rows change between tesseract
+5.5.1 (host) and 5.5.0 (container) with no code change; 7 verdicts flip. The grader's
+container is authoritative, and we do not control its exact image. This is a
+robustness property of the extraction layer, not a bug the rewrite introduces, but it
+bounds how much any host-measured tuning can be trusted. Note that two of the seven
+flips (`MIB-000096`, `MIB-000758`) fall from `R3_unpaid` at 0.96 into
+`FALLBACK_extraction_fail` at 0.34 — direct evidence for B2-1, since the fallback
+bucket is where degraded extraction lands. *Proposed counterfactual: measure how many
+packets sit within one character of a rule boundary.*
+
 **B2-3 — `R_A1_non_dip_waived` at 0.37.** A rule asserting it is wrong 63% of the
 time. Brier-optimal *for that bucket*, which is the tell that the bucket wants
 splitting rather than tuning. *Proposed counterfactual: measure accuracy split by
@@ -342,19 +352,50 @@ presence of biometric evidence, since the L7 upgrade already partitions on it.*
 ### The golden oracle
 
 Because `v3/` remains runnable, parity is checkable **per case**, not in aggregate.
+Both golden files are already captured and committed under `golden/`, verified to
+come from commit `92eb104` by `sha256` comparison of the pipeline files inside the
+Docker image against `git show 92eb104:<file>`.
 
-1. **Milestone 0:** run v3 over the 1000-packet dev sample, commit its
-   `predictions.jsonl` as a golden file.
-2. **After every milestone:** run v4 over the same sample and `diff` against golden.
-   **Zero bytes of difference is the bar.**
-3. `dev_score.sh` as final confirmation only — a byte-identical file scores
-   identically by construction.
+| Golden | Environment | Score | Use |
+|---|---|---|---|
+| `golden/native-92eb104-seed42-n1000.jsonl` | Host, tesseract 5.5.1 | 118.08 | Every milestone (fast) |
+| `golden/docker-92eb104-n1000.jsonl` | Container, tesseract 5.5.0 | 117.98 | Final gate (~55 min) |
 
-This is strictly stronger than the brief's ±0.3-point gate. Two verdicts can swap and
-still total 118.08; a byte diff catches that, an aggregate score does not.
+**After every milestone:** run v4 over the same 1000 packets and `diff` against the
+golden **for that environment**. Zero bytes of difference is the bar.
 
-Sampling must be pinned: same `MIB_SEED` (42) and same N (1000) for golden and every
-comparison run.
+`dev_score.sh` is confirmation only — a byte-identical file scores identically by
+construction.
+
+Sampling is pinned: `MIB_SEED=42`, N=1000. The train set is exactly 1000 packets, so
+this is the full set.
+
+### Environments are not interchangeable
+
+Docker parity measurement on 2026-08-03 established that **145 of 1000 rows differ
+between host and container with no code change at all** — 140 field-value diffs and
+7 verdict changes. Cause: the environments ship different OCR engines (tesseract
+5.5.1 / leptonica 1.85.0 on host, 5.5.0 / 1.84.1 in the container), so some
+characters read differently and propagate through L4 into L6/L7.
+
+Two consequences that bind this design:
+
+1. **Only ever diff like against like.** A native v4 run is compared to the native
+   golden; a Docker v4 run to the Docker golden. Cross-comparison would report ~145
+   spurious diffs and make the oracle useless.
+2. **The container number is the real one.** The eval runs in the container, so
+   117.98 — not 118.08 — is the score the submission actually earns. All tuning to
+   date was measured on the host.
+
+This also vindicates rejecting the aggregate-score gate: the score moved just −0.10
+while 14.5% of the output changed. A ±0.3-point tolerance would have called this
+"parity."
+
+### Runtime (measured, brief requirement #4)
+
+Docker, cold cache: **54m 54s for 1000 packets = 3.29 s/PDF** against a 6 s/PDF
+budget. Extrapolated to the 5000-packet eval set: ~16,450 s against a 30,000 s hard
+limit. v4 adds no per-packet work, so this is a confirmation rather than a risk.
 
 ### Tests
 
@@ -393,7 +434,7 @@ caused it.
 
 | # | Milestone | Gate |
 |---|-----------|------|
-| 0 | Capture golden `predictions.jsonl` from v3 (seed 42, N=1000) | committed |
+| 0 | ~~Capture goldens~~ **DONE** — both committed under `golden/`, provenance verified against `92eb104` | ✅ |
 | 1 | `v4/` skeleton + `vocab.py`, `patterns.py` | imports clean |
 | 2 | L1–L3: `acquire`, `extract`, `filters/` | ported unit tests green |
 | 3 | L4–L5: `signals`, `consolidate` (+ `normalize`, `reocr`, `source_type`) | ported unit tests green |
@@ -469,5 +510,7 @@ Stated explicitly so the reviewer can see preservation was deliberate:
 | Transcription error in a 605-line module (`signals.py`) | Golden diff after each milestone localises it to one step |
 | OCR cache invalidated by a changed cache tag | Explicit test pinning tag strings per flag combination |
 | Ported tests silently weakened during import rewrite | Intent preserved; diff each ported test against its v3 original |
-| Golden file captured from a dirty tree | Milestone 0 runs from committed `92eb104` and the golden file is committed |
+| Golden file captured from a dirty tree | Resolved — both goldens verified by `sha256` against `92eb104` and committed |
+| Cross-environment diffing produces ~145 spurious mismatches | Two goldens; compare only within the same environment (§8) |
+| Docker parity run costs ~55 min, discouraging its use | Native golden gates every milestone; Docker golden gates only the final milestone |
 | Scope creep from bucket 2 findings | Three-bucket rule; ledger captures without actioning |
