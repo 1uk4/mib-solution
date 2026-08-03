@@ -11,10 +11,11 @@ RUN pip install --no-cache-dir 'pillow~=11.0'
 
 WORKDIR /app
 
+# v4 only — the pipeline is standalone. v1/v2/v3 exist in the repo as
+# frozen reference and are deliberately NOT shipped: the image building
+# without them is the proof of standalone-ness.
 COPY run.sh solution.py /app/
-COPY v1/ /app/v1/
-COPY v2/ /app/v2/
-COPY v3/ /app/v3/
+COPY v4/ /app/v4/
 RUN chmod +x /app/run.sh && mkdir -p /input /output
 
 ENTRYPOINT ["/app/run.sh"]

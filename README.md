@@ -13,46 +13,50 @@ mib-solution/
 ├── solution.py          # thin dispatcher — imports active version
 ├── score.sh             # production scoring: full docker constraints on 1000 PDFs
 ├── dev_score.sh         # dev scoring: native mode w/ OCR cache, ~2 min run
-├── v1/                  # CLOSED — Version 1 (stdlib-only), 103.48 / 150
-│   ├── solution.py
-│   ├── EDGE_CASES.md    # rule catalog + provenance tags
-│   └── ITERATIONS.md    # chronological iteration log
-├── v2/                  # CLOSED — Version 2 (OCR safety guard), 104.98 / 150
-│   ├── solution.py
-│   ├── EDGE_CASES.md
-│   └── ITERATIONS.md
-└── v3/                  # ACTIVE — layered pipeline
+├── parity.sh            # byte-parity gate vs golden/ (native|docker)
+├── golden/              # committed reference outputs from v3 @ 92eb104
+├── v1/, v2/, v3/        # FROZEN — prior versions, kept as reference; not shipped
+└── v4/                  # ACTIVE — standalone layered pipeline (118.08 / 150)
     │
-    │  === PRODUCTION (shipped in Docker image) ===
-    ├── solution.py      # dispatcher, main() loop, progress logging
+    │  === FOUNDATION (read by every layer) ===
+    ├── config.py        # ALL feature flags — one frozen dataclass
+    ├── confidence.py    # ALL confidence values — calibrated registry
+    ├── vocab.py         # closed enums with provenance
+    ├── patterns.py      # every regex + OCR word list
+    │
+    │  === PIPELINE ===
     ├── acquire.py       # L1 — source enumeration (text streams + images)
-    ├── extract.py       # L2 — text decode + Tesseract OCR (with cache + skip gate)
+    ├── extract.py       # L2 — text decode + Tesseract OCR (cache + skip gate)
     ├── filters/         # L3 — trust boundary (sanitizers + detectors)
     │   ├── injection.py     # sanitizer: strips prompt-injection lines
     │   ├── redaction.py     # sanitizer: strips [NAME CUT OUT] etc.
     │   └── illegibility.py  # detector: real-word ratio < 30%
-    ├── signals.py       # L4 — typed Signal emission with validation
+    ├── signals.py       # L4 — field extraction + typed Signal emission
     ├── consolidate.py   # L5 — signal grouping + agreement scoring
-    ├── rules.py         # L6 — V1 rule chain (imported as library)
-    ├── policy.py        # L7 — safety guards (OCR override, OCR-only, conflict)
-    ├── ocr_signal.py    # L7 helper — OCR risk-signal grader
-    │
-    │  === DEV (excluded from Docker via .dockerignore) ===
-    └── dev/
-        ├── inspect_case.py       # dump everything about one packet
-        ├── analysis/             # data analysis tools (grows as rules mature)
-        │   ├── extract_features.py  # → /tmp/mib-features.jsonl
-        │   └── correlate.py         # ranks features by truth discrimination
-        └── docs/
-            ├── RULE_AUDIT.md     # ongoing rule audit log
-            ├── EDGE_CASES.md     # V3-specific edge cases
-            └── ITERATIONS.md     # V3 iteration history
+    ├── rules.py         # L6 — ordered rule chain
+    ├── policy/          # L7 — 9 named stages + 12-line dispatcher
+    │   ├── context.py       # Verdict, PolicyContext, make_ctx
+    │   ├── upgrades.py      # 3 upgrade stages
+    │   ├── bypasses.py      # 1 trust bypass
+    │   └── guards.py        # 5 guard stages
+    ├── normalize.py     # L4 helper — post-OCR value normalization
+    ├── reocr.py         # L4 helper — char-whitelist re-OCR
+    ├── source_type.py   # L4 helper — Field Manual authority classifier
+    ├── evidence.py      # shared readers: OCR signal + biometric slip
+    ├── solution.py      # driver: main() loop, progress logging
+    ├── OBSERVATIONS.md  # bucket-2/3 ledger for the next phase
+    └── tests/           # 141 tests (incl. per-stage L7 isolation)
 ```
+
+Dev tooling and measured history live in `v3/dev/` (analysis scripts,
+RULE_AUDIT.md); they are pointed at v4 as the first task of the next phase.
+The reviewer-facing design document is `docs/TECHNICAL_DEBRIEF.md`.
 
 ## Active version
 
-`solution.py` currently dispatches to `v3.solution`. Switch versions by
-editing the import line.
+`solution.py` dispatches to `v4.solution`. v4 imports nothing from
+v1/v2/v3 — the Docker image ships `v4/` alone, and behavior is
+byte-identical to v3 @ `92eb104` (verify anytime with `./parity.sh`).
 
 ## Run
 

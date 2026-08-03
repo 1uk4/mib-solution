@@ -13,4 +13,9 @@ v3/dev/
 v1/*.md
 v2/*.md
 v3/*.md
+v4/*.md
+v4/tests/
 dev_score.sh
+parity.sh
+golden/
+docs/

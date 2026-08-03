@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Entry point — dispatches to the active version's pipeline.
 
-Switch versions by changing the import below. Each `vN/` directory is a
-self-contained pipeline with its own docs (`EDGE_CASES.md`, `ITERATIONS.md`).
+Active pipeline: v4 (standalone; imports nothing from v1/v2/v3).
+v1-v3 remain in the repository as frozen reference — see
+docs/superpowers/specs/2026-08-03-v4-standalone-rewrite-design.md.
 """
 import sys
 
-from v3.solution import main, VERSION  # active pipeline
+from v4.solution import main, VERSION  # active pipeline
 
 
 if __name__ == "__main__":
