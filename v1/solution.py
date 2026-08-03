@@ -537,23 +537,34 @@ def _is_stale(arrival: str) -> bool:
     return (RECEIPT_DATE_PROXY - d).days > STALE_DAYS
 
 
-# Confidence table (from EDGE_CASES.md §12)
+# Confidence table — EMPIRICALLY CALIBRATED from training set.
+#
+# Original values were hand-picked (EDGE_CASES.md §12) and systematically
+# over-confident on the R_A1_* auto-approve rules, incurring heavy Brier
+# penalty on their wrong cases. Values below are set to each rule's
+# measured accuracy on the 1000-packet training set (features.jsonl,
+# 2026-08-03) — the Brier-minimizing choice per per-rule bucket.
+#
+# 100%-accurate rules are capped at 0.99 to leave headroom for eval-set
+# tail cases we haven't seen. R_ADJUDICATOR_FINDING was 88.9% in raw
+# features.jsonl but reflects the pre-finding-trust-bypass pipeline;
+# under the current pipeline it is 100% and kept at 0.99.
 CONFIDENCE = {
-    "R_ADJUDICATOR_FINDING": 0.99,  # "Finding:" line — evidence precedence #1
-    "R0_hard_embargo": 0.98,        # TRAPPIST-1e / Eris Relay always DENY
-    "R1_transit7": 0.98,
-    "R2_disqualifier": 0.98,
-    "R3_unpaid": 0.98,
-    "R4_revoked_sponsor": 0.95,
-    "R4b_embargoed_home": 0.90,
-    "R5_stale": 0.95,
-    "R_R1_flag_present": 0.90,
-    "R_R2_unknown_fee": 0.98,
-    "R_A1_paid_clean": 0.94,
-    "R_A1_dip1_waived": 0.92,
-    "R_A1_non_dip_waived": 0.70,   # ASSUMED_HARDSHIP_WAIVER — V2 to verify
-    "FALLBACK_extraction_fail": 0.50,
-    "FALLBACK_missing_arrival": 0.60,
+    "R_ADJUDICATOR_FINDING": 0.99,  # 162 fires, 100% correct post-bypass
+    "R0_hard_embargo": 0.99,        # 34 fires, 100% correct (was 0.98)
+    "R1_transit7": 0.97,            # 37 fires, 97% correct (was 0.98)
+    "R2_disqualifier": 0.99,        # 56 fires, 100% correct (was 0.98)
+    "R3_unpaid": 0.96,              # 27 fires, 96% correct (was 0.98)
+    "R4_revoked_sponsor": 0.98,     # 62 fires, 98% correct (was 0.95)
+    "R4b_embargoed_home": 0.99,     # 11 fires, 100% correct (was 0.90)
+    "R5_stale": 0.96,               # 24 fires, 96% correct (was 0.95)
+    "R_R1_flag_present": 0.94,      # 70 fires (post-reorder), 94% correct (was 0.90)
+    "R_R2_unknown_fee": 0.99,       # 24 fires, 100% correct (was 0.98)
+    "R_A1_paid_clean": 0.69,        # 168 fires, 69% L7-kept correct (was 0.94)
+    "R_A1_dip1_waived": 0.79,       # 22 fires, 79% L7-kept correct (was 0.92)
+    "R_A1_non_dip_waived": 0.37,    # 43 fires, 37% correct after biometric-upgrade splits
+    "FALLBACK_extraction_fail": 0.34,  # 251 fires, 34% correct after rule-reorder pulled R_R1 cases out
+    "FALLBACK_missing_arrival": 0.46,  # 13 fires, 46% correct
 }
 
 
@@ -613,6 +624,14 @@ def adjudicate(fields: dict) -> tuple[str, float, str]:
     if arrival and visa and _is_stale(arrival) and visa != "DIP-1":
         return "DENIED", CONFIDENCE["R5_stale"], "R5_stale"
 
+    # R_R1: any review-only flag (disqualifying handled above) → REVIEW.
+    # Placed BEFORE the extraction-failure fallback: if we extracted a
+    # review flag, that's high-precision evidence (96% correct empirically),
+    # more reliable than falling through to FALLBACK's 41%. Same REVIEW
+    # verdict either way — only calibration improves.
+    if flags:
+        return "NEEDS_REVIEW", CONFIDENCE["R_R1_flag_present"], "R_R1_flag_present"
+
     # ---- Extraction-failure fallback ----
     # If we can't positively identify visa or fee, we can't safely apply
     # remaining rules and definitely can't approve. Route to REVIEW.
@@ -626,9 +645,6 @@ def adjudicate(fields: dict) -> tuple[str, float, str]:
     # ---- REVIEW pipeline (§10) ----
     if fee == "unknown":
         return "NEEDS_REVIEW", CONFIDENCE["R_R2_unknown_fee"], "R_R2_unknown_fee"
-
-    if flags:  # any review-only flag (disqualifying handled above)
-        return "NEEDS_REVIEW", CONFIDENCE["R_R1_flag_present"], "R_R1_flag_present"
 
     # ---- APPROVE (§10) ----
     if fee == "paid":

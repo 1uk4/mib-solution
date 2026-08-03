@@ -593,4 +593,13 @@ def extract_signals(sources: list[Source]) -> dict:
         )
 
 
-    return {"signals": signals, "image_ocr": image_ocr}
+    any_illegibility_excluded = any(
+        not s.trusted and s.exclusion_reason and "Illegibility" in s.exclusion_reason
+        for s in sources
+    )
+    return {
+        "signals": signals,
+        "image_ocr": image_ocr,
+        "combined_text": combined_text,
+        "any_illegibility_excluded": any_illegibility_excluded,
+    }
