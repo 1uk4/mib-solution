@@ -98,17 +98,40 @@ v4/
     context.py          PolicyContext
     upgrades.py         3 upgrade stages
     bypasses.py         1 trust bypass
-    guards.py           4 guard stages
+    guards.py           5 guard stages
 
   normalize.py      value normalization  (L4 helper)
   reocr.py          char-whitelist re-OCR (L4 helper)
   source_type.py    evidence-hierarchy classifier (L4 helper)
   evidence.py       shared readers: OCR signal evaluator, biometric slip reader
   solution.py       entry point
+  data/
+    tesseract_user_words.txt   OCR user-words dictionary (L2; path resolved
+                               relative to extract.py, so it MUST move with it)
 ```
 
 The file list reads as the pipeline, so the debrief's diagram and the directory
-listing are the same artifact.
+listing are the same artifact. **Every layer module carries a docstring stating
+what it does and what it does NOT do** (brief structural change #5); the gate for
+each milestone includes checking the docstring exists for the modules it delivers.
+
+### v1 symbol routing
+
+The 18 symbols v3 imports from `v1.solution` map to v4 as follows. Three need
+explicit homes the foundation four can't host:
+
+| v1 symbol(s) | v4 destination |
+|---|---|
+| `SPECIES`, `HOME_WORLDS`, `VISA_CLASSES`, `FEE_VALUES`, `DISQUALIFYING_FLAGS`, `REVIEW_ONLY_FLAGS`, `ALL_FLAGS`, `REVOKED_SPONSORS`, `EMBARGOED_HOMES_HARD`, `EMBARGOED_HOMES_SOFT`, `RECEIPT_DATE_PROXY`, `STALE_DAYS` | `vocab.py` (`ALL_FLAGS` constructed as the union, exactly as `v1:70`) |
+| `STREAM_RE`, `FILTER_RE`, `TEXT_OP_RE`, `INJECTION_MARKERS`, plus the ~15 field-label/extraction regexes `extract_fields` uses (`SPONSOR_RE`, `ISO_DATE_RE`, `VISA_LABEL_RE`, `NAME_LABEL_RE`, `REGISTRY_NAME_RE`, `SPONSOR_ATTESTS_RE`, `PURPOSE_LABEL_RE`, `SPONSOR_PURPOSE_RE`, `FEE_LABEL_RE`, `AMOUNT_LABEL_RE`, `WAIVER_CODE_RE`, `FLAG_LABEL_RE`, `PLACEHOLDER_RE`, `FINDING_RE`, `CORRECTION_RE`) | `patterns.py` |
+| `_decode_stream`, `_pdf_unescape` | `extract.py` (L2 internals) |
+| `adjudicate` + its private helpers `_flag_set`, `_is_stale` | `rules.py` |
+| `extract_fields` + its ~10 private extraction helpers (`_extract_applicant_name`, `_find_vocab`, `_extract_visa`, `_first_match`, `_extract_purpose`, `_extract_flags`, `_extract_fee`, `_extract_finding`, `_apply_corrections`, …) | `signals.py` (its only v3 caller) |
+| `CONFIDENCE` | `confidence.py` |
+| `_default_field` | `solution.py` (its only consumer) |
+
+`CASE_ID_RE` and `VISA_RE` are provably unreferenced by the live chain — dropped
+(bucket 1).
 
 ---
 
@@ -163,7 +186,10 @@ it always was in practice.
 #### Requirements
 
 - `Config` is `@dataclass(frozen=True)`; a single `CONFIG = Config.from_env()` at import.
-- `from_env()` reads exactly one variable: `MIB_OCR_CACHE_DIR`.
+- Shape: **10 boolean fields (8 default `True`, 2 default `False`) plus
+  `ocr_cache_dir: str | None = None`** — the cache dir is a path, not a bool.
+- `from_env()` reads exactly one variable: `MIB_OCR_CACHE_DIR`
+  (`.strip() or None`, matching `v3/extract.py:51`).
 - Every field carries its measured justification as an inline comment.
 - **No default value changes** (brief Rule 2) — only the mechanism that supplies it.
 - Flag-reading functions accept `config: Config = CONFIG`; L7 stages read
@@ -176,16 +202,20 @@ Net effect: 11 env vars across 3 files → **1 env var, one config module**. Pit
 (env-gated features silently drifting under Docker) is eliminated rather than merely
 consolidated — there is no longer a drift surface.
 
-**Cache-key hazard.** `v3/extract.py:73 _cache_config_tag()` appends `"uw"` when
-`MIB_USER_WORDS` is on. With `user_words` hardcoded `True`, the tag is always
-`"_uw"` — which is what the existing warm cache on disk is keyed by. v4 must emit
-byte-identical tag strings, pinned by an explicit test (brief Rule 3).
-
 **Cache-key hazard.** `v3/extract.py:73 _cache_config_tag()` builds an OCR cache-key
-suffix from `MIB_USER_WORDS` (appending `"uw"`). Changing when or how that tag is
-computed silently invalidates the entire warm OCR cache (brief Rule 3). v4 must
-produce byte-identical tag strings, pinned by an explicit test over every flag
-combination.
+suffix from the user-words flag, appending `"uw"`. With `user_words` defaulting
+`True`, the effective tags are `"_uw"` (single-pass), `"_dual_uw"` (dual) and
+`"_triple_uw"` (triple) — exactly what the warm cache on disk is keyed by. Changing
+when or how the tag is computed silently invalidates hours of cached OCR (brief
+Rule 3). v4 must emit byte-identical tag strings, pinned by an explicit test over
+every flag combination (on → `"_uw"`, `Config(user_words=False)` → `""`).
+
+**User-words data hazard.** `_user_words_flags()` falls back to `[]` when the
+dictionary file is missing (`v3/extract.py:63-70`) — no error. On native runs the
+warm cache masks the difference entirely; the breakage would surface only at the
+final Docker cold-cache gate. So milestone 2 both copies
+`v4/data/tesseract_user_words.txt` and adds a guard test asserting
+`_user_words_flags()` returns a non-empty flag list under default config.
 
 ### 4.2 `confidence.py`
 
@@ -212,6 +242,28 @@ Closed enums, each carrying a provenance comment naming its source — the
 Covers: `DISQUALIFYING_FLAGS`, `REVIEW_ONLY_FLAGS`, `REVOKED_SPONSORS`,
 `EMBARGOED_HOMES_HARD`, `EMBARGOED_HOMES_SOFT`, `VISA_CLASSES`, `FEE_VALUES`,
 `SPECIES`, `HOME_WORLDS`, plus `RECEIPT_DATE_PROXY` / `STALE_DAYS`.
+
+#### Registry completeness test — matching rules
+
+The test "every tag the pipeline can emit has a registry entry" cannot use exact
+string equality; the verified tag inventory splits three ways:
+
+1. **Exact-match tags**, including four that *look* prefixed but are constant
+   strings: `ocr_finding:DENIED`, `ocr_finding:REVIEW`, `ocr_reason:damaged_registry`,
+   `ocr_reason:visible_policy_notes`.
+2. **13 parameterized families** needing prefix matching: `R_ADJUDICATOR_FINDING[`,
+   `R0_hard_embargo[`, `R2_disqualifier[`, `ocr_only_downgrade:`, `field_conflict:`,
+   `missing_required:`, `defensive_downgrade_thin_evidence:`, `ocr_disq_flag:`,
+   `ocr_revoked_sponsor:`, `ocr_embargo_home:`, `ocr_deny_stem:`, `ocr_review_flag:`,
+   `ocr_review_stem:`. All draw parameters from closed vocab except
+   `field_conflict:` — it embeds arbitrary extracted values and is genuinely
+   open-ended, so it must be prefix-matched.
+3. **One alias**: the emitted tag `R_A1_non_dip_waived_TO_REVIEW` looks up
+   `CONFIDENCE["R_A1_non_dip_waived"]` — the registry needs an explicit alias entry
+   rather than a same-name assumption.
+
+The test must also cover the two default-off tags (`R3_unpaid_biometric_waiver`,
+`defensive_downgrade_thin_evidence:`) so the insurance paths stay registry-backed.
 
 ### 4.4 `patterns.py`
 
@@ -284,6 +336,21 @@ some would be downgraded. The brief's sketch places the bypass *before* the gate
 the live code places it *after*; both admit the identical set to the guards and both
 early exits return an unmodified verdict, so the ordering is observationally a no-op.
 **v4 matches the live code** and records the equivalence in the debrief.
+
+**Signal-bundle key access differs by stage and must be preserved.** The upgrades
+read `signals.get("combined_text")` / `signals.get("image_ocr")` (tolerant), while
+guard 1 reads `signals["image_ocr"]` (raises on absence, `v3/policy.py:224`).
+`PolicyContext` construction must not paper over this difference — build the context
+from the same bundle the current code receives and keep access semantics identical.
+
+### `Verdict` shape — decided now, before test porting
+
+`Verdict` is a `NamedTuple("Verdict", [("adj", str), ("conf", float), ("tag", str)])`.
+A NamedTuple unpacks as a plain 3-tuple, so the 30 ported policy tests that do
+`adj, conf, tag = apply_policy(...)` keep working unchanged, while new v4 code gets
+`.adj` / `.conf` / `.tag` attribute access. A `PolicyContext` factory helper
+(`make_ctx(fields=..., adj=..., conf=..., tag=..., signals=...)`) ships with the
+test suite so per-stage tests construct contexts in one line.
 
 ### `PolicyContext`
 
@@ -361,14 +428,36 @@ Docker image against `git show 92eb104:<file>`.
 | `golden/native-92eb104-seed42-n1000.jsonl` | Host, tesseract 5.5.1 | 118.08 | Every milestone (fast) |
 | `golden/docker-92eb104-n1000.jsonl` | Container, tesseract 5.5.0 | 117.98 | Final gate (~55 min) |
 
-**After every milestone:** run v4 over the same 1000 packets and `diff` against the
-golden **for that environment**. Zero bytes of difference is the bar.
+**At every end-to-end milestone (6–8):** run v4 over the same 1000 packets and
+`diff` against the golden **for that environment**. Zero bytes of difference is the
+bar. Milestones 1–5 deliver modules but no runnable pipeline end, so their gates are
+test-based; the first golden diff fires at milestone 6, which therefore includes a
+minimal `v4/solution.py` driver (`predict_case` + `main`) so an end-to-end
+`predictions.jsonl` exists to diff.
 
 `dev_score.sh` is confirmation only — a byte-identical file scores identically by
-construction.
+construction. **Always invoke it as `./dev_score.sh 1000`** — the bare command
+defaults to `N=100` and would silently gate against a tenth of the set.
 
 Sampling is pinned: `MIB_SEED=42`, N=1000. The train set is exactly 1000 packets, so
 this is the full set.
+
+### The 800/200 split (added to the brief 2026-08-03)
+
+The brief now requires train ≥ 117.7 **and** val ≥ 117.7 post-rewrite, measured via
+`v3/dev/analysis/split_score.py` (seed 20260803, lists regenerable into
+`/tmp/mib-splits/`). The split tooling is **reporting-only** — `dev_score.sh` is
+unmodified and still scores all 1000; the split partitions `case_scores.jsonl` after
+the fact — so it cannot interfere with the parity oracle.
+
+For this phase the split gate is **subsumed by native golden parity**: byte-identical
+output reproduces train 118.088 / val 118.041 exactly, no separate measurement
+needed. Caveat for the Docker gate: docker-measured split scores read ~117.98/117.98
+— different numbers that still clear ≥ 117.7 but must never be compared against the
+native baselines (like-against-like, as above). The split becomes an independent,
+binding check only when bucket-2 behavior changes begin; at that point every
+measurement pass reports both scores, and val is never tuned against
+(a train-improves/val-doesn't result means back the change out).
 
 ### Environments are not interchangeable
 
@@ -416,9 +505,31 @@ Added, per brief Part 6:
 
 Target: 79 ported + at least 4 new = **83+ tests against v4**.
 
-Ported tests that currently manipulate the environment (`monkeypatch.setenv` plus
-`importlib.reload`) are rewritten to inject a `Config`. This is a mechanical change
-that preserves each test's intent while removing global-state mutation from the suite.
+Porting is **three tracks**, not two (verified inventory, 2026-08-03):
+
+1. **Mechanical (36 tests)** — import rewrites only.
+2. **Adaptive (33 tests)** — currently use `monkeypatch.setenv` + `importlib.reload`
+   or reach into private symbols. Exactly 10 private symbols are touched:
+   `extract._tesseract`, `extract._ocr_image`, `extract._ocr_image_triple`,
+   `extract._user_words_flags`, `extract._cache_config_tag`,
+   `extract._SHARPEN_ENABLED`, `signals._NORMALIZE_ENABLED`,
+   `signals._REOCR_ENABLED`, `signals._norm`, `signals._norm_and_repair`. The six
+   function symbols survive as config-accepting functions; the three module-global
+   flags (`_SHARPEN_ENABLED`, `_NORMALIZE_ENABLED`, `_REOCR_ENABLED`) disappear with
+   the env mechanism, so tests asserting those attributes are rewritten as
+   Config-injection *behavior* tests (assert the sharpened pass runs / doesn't run),
+   preserving intent rather than the attribute check. Tests targeting env vars that
+   cease to exist (`MIB_OCR_SHARPEN`, `MIB_USER_WORDS`, …) assert `Config` fields
+   and injected behavior instead.
+3. **Signature migration (all 30 policy tests)** — every current policy test calls
+   `apply_policy(fields, adj, conf, tag, signals)` positionally and unpacks a
+   3-tuple. The `Verdict` NamedTuple keeps the unpack working (§5); the
+   `make_ctx(...)` factory handles construction. 20 of the 33 adaptive tests also
+   need this track; 10 policy tests need *only* this track.
+
+No test imports `v1` directly and none touches a private `v3.policy` symbol — L7
+tests ride entirely on the public `apply_policy` surface plus the
+`_source_class`/`_agreement` fields-dict contract, which v4 preserves.
 
 ### Runtime
 
@@ -429,22 +540,36 @@ per-packet work, so this is a confirmation rather than a risk.
 
 ## 9. Build sequence
 
-Each milestone ends with a golden diff, so drift is attributed to the step that
-caused it.
+Milestones 1–5 are gated by tests (no runnable pipeline end yet); milestones 6–8
+end with a golden diff, so any drift is attributed to the step that caused it.
 
 | # | Milestone | Gate |
 |---|-----------|------|
 | 0 | ~~Capture goldens~~ **DONE** — both committed under `golden/`, provenance verified against `92eb104` | ✅ |
 | 1 | `v4/` skeleton + `vocab.py`, `patterns.py` | imports clean |
-| 2 | L1–L3: `acquire`, `extract`, `filters/` | ported unit tests green |
-| 3 | L4–L5: `signals`, `consolidate` (+ `normalize`, `reocr`, `source_type`) | ported unit tests green |
+| 2 | L1–L3: `acquire`, `extract`, `filters/` + copy `data/tesseract_user_words.txt` | ported unit tests green + user-words guard test |
+| 3 | L4–L5: `signals`, `consolidate` (+ `normalize`, `reocr`, `source_type`, `evidence.py`) | ported unit tests green |
 | 4 | `config.py`; all call sites migrated; 10 env vars retired | config defaults + cache-tag tests |
 | 5 | `confidence.py`; all ~30 values consolidated | registry completeness test |
-| 6 | L6 `rules.py` — standalone rule chain | **golden diff = 0** |
+| 6 | L6 `rules.py` + minimal `solution.py` driver (first end-to-end run) | **golden diff = 0** |
 | 7 | L7 split into 9 stages | **golden diff = 0** |
-| 8 | `solution.py` entry; `run.sh` / `Dockerfile` cutover | **golden diff = 0**, then `dev_score.sh`, then Docker parity |
+| 8 | `solution.py` finalized; `run.sh` / `Dockerfile` cutover | **golden diff = 0**, then `./dev_score.sh 1000`, then Docker parity vs docker golden |
+
+At milestone 6, L7 is not yet split — the driver calls the transcribed-but-unsplit
+policy (a verbatim port of `apply_policy`) so the end-to-end diff isolates L1–L6
+transcription errors; milestone 7 then replaces it with the staged version under the
+same diff gate.
 
 A section of the debrief is written at each milestone, while the reasoning is fresh.
+Every module delivered in a milestone must carry its does/does-not docstring before
+the milestone closes (brief structural change #5).
+
+**Deliberately deferred to the bucket-2 phase** (brief Part 6 item 3): regenerating
+`features.jsonl` and re-running `calibrate_confidence.py` to confirm rule accuracies
+are unshifted. Under a byte-identical gate this check is redundant — identical output
+implies identical per-rule fire/accuracy stats. The analysis tooling under
+`v3/dev/analysis/` is ported/pointed at v4 as the first task of the bucket-2 phase,
+before any measurement is trusted.
 
 ---
 
@@ -500,6 +625,9 @@ Stated explicitly so the reviewer can see preservation was deliberate:
 | Score within ±0.3 pts | Byte-identical output | Strictly stronger; aggregate score hides compensating errors |
 | All 79 tests pass | 79 ported to v4 + 4 new | v3's tests prove nothing about v4 once v3 is frozen |
 | Trust bypass before the `adj != APPROVED` gate | After, matching live code | Equivalent; code is the authority |
+| Post-rewrite train ≥ 117.7 AND val ≥ 117.7 (must-have #2, amended 2026-08-03) | Subsumed by native golden parity this phase | Byte-identical output reproduces train 118.088 / val 118.041 exactly; split gate binds independently only once bucket-2 changes begin (§8) |
+| Part 6 item 3: regenerate features + re-run `calibrate_confidence.py` post-refactor | Deferred to bucket-2 phase | Redundant under byte-identity — identical output implies identical per-rule stats; tooling is ported to v4 as the first bucket-2 task (§9) |
+| Cat FA ≤ 17 (must-have #3) | Subsumed by parity | Byte-identical output has exactly the baseline's 15 cat FAs |
 
 ---
 
@@ -507,7 +635,9 @@ Stated explicitly so the reviewer can see preservation was deliberate:
 
 | Risk | Mitigation |
 |---|---|
-| Transcription error in a 605-line module (`signals.py`) | Golden diff after each milestone localises it to one step |
+| Transcription error in a 605-line module (`signals.py`) | Golden diff at milestones 6–8 plus ported unit tests at 2–5 localise it |
+| `tesseract_user_words.txt` missing in v4 — silent `[]` fallback masked by warm cache, visible only at final Docker gate | File copied at milestone 2 with a guard test asserting `_user_words_flags()` is non-empty |
+| `Verdict`/`PolicyContext` API churn breaks 30 policy tests | `Verdict` NamedTuple stays tuple-unpackable; `make_ctx` factory pinned in §5 before porting |
 | OCR cache invalidated by a changed cache tag | Explicit test pinning tag strings per flag combination |
 | Ported tests silently weakened during import rewrite | Intent preserved; diff each ported test against its v3 original |
 | Golden file captured from a dirty tree | Resolved — both goldens verified by `sha256` against `92eb104` and committed |

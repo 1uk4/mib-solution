@@ -203,10 +203,27 @@ L7 policy        → apply_policy() → maybe modify verdict via upgrades/guards
 ### Must-haves (regression-blocking)
 
 1. **All 79 existing tests must pass** — behavior preservation
-2. **Score must not regress** — docker parity check after rewrite must land within ±0.3 pts of 118.08
+2. **Score must not regress on either split**:
+   - Train (800 cases): baseline 118.088 → post-rewrite must be ≥ 117.7 (±0.4 tolerance)
+   - Val (200 cases): baseline 118.041 → post-rewrite must be ≥ 117.7 (±0.4 tolerance)
+   - Measure with `v3/dev/analysis/split_score.py` after each `dev_score.sh` run
 3. **Cat FA count must not increase** beyond 17 (baseline 15, tolerance 2)
 4. **Runtime must fit** the 6-sec/PDF budget (measured under docker)
 5. **All existing env-var-gated features preserved** (even if consolidated)
+
+### Train/val split discipline (added 2026-08-03)
+
+We now maintain an 800/200 held-out split (seed 20260803) in
+`/tmp/mib-splits/{train.txt,val.txt}`. Current pipeline scores 118.088 on
+train and 118.041 on val — essentially no overfitting.
+
+- **Never move the split.** Same 800/200 partitions for all further work.
+- **Report both scores** after every measurement pass. If train score
+  improves but val doesn't, you've overfit the rule to training-only patterns
+  and should back it out.
+- **Do NOT tune based on val performance.** Val is a held-out estimate, not
+  a second training set. Adjusting rules to improve val score turns it into
+  a training set and destroys its held-out guarantee.
 
 ### Structural changes required
 
