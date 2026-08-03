@@ -60,20 +60,41 @@ golden, and a Docker v4 run to the Docker golden. Never cross-compare.
 
 ## Usage
 
+**Do not use `/tmp/mib-dev-output`.** It is a stale directory, not a working symlink —
+see *Known tooling bug* below. Take the run directory from `dev_score.sh`'s own final
+`Predictions:` line instead.
+
 ```bash
-# Native parity check (fast, run at every milestone)
-./dev_score.sh 1000                      # writes /tmp/mib-dev-output/predictions.jsonl
-diff <(sort /tmp/mib-dev-output/predictions.jsonl) \
-     <(sort golden/native-92eb104-seed42-n1000.jsonl) && echo "PARITY OK"
+# Native parity check (~3.5 min, run at every milestone)
+./dev_score.sh 1000
+# note the path printed on the final "Predictions:" line, then:
+shasum -a 256 /tmp/mib-dev-runs/<RUN_ID>/predictions.jsonl \
+              golden/native-92eb104-seed42-n1000.jsonl
 
 # Docker parity check (~55 min, final gate only)
 MIB_DOCKER=1 ./dev_score.sh 1000
-diff <(sort /tmp/mib-output/predictions.jsonl) \
-     <(sort golden/docker-92eb104-n1000.jsonl) && echo "DOCKER PARITY OK"
+shasum -a 256 /tmp/mib-output/predictions.jsonl \
+              golden/docker-92eb104-n1000.jsonl
 ```
 
-Rows are written in `case_id` order by `solution.py`, so a plain `diff` also works;
-sorting guards against any future change in emission order.
+Rows are emitted in `case_id` order by `solution.py`, so the raw files compare
+directly — matching `sha256` is the cleanest gate. Use
+`diff <(sort a) <(sort b)` only when you need to see *which* rows differ.
+
+### Determinism verified
+
+On 2026-08-03 an unchanged v3 was re-run natively and reproduced
+`native-92eb104-seed42-n1000.jsonl` with an identical `sha256`
+(`d538fe5a…729b`). The pipeline is deterministic within a fixed environment, so any
+byte difference from v4 is a real defect, not noise.
+
+### Known tooling bug
+
+`dev_score.sh:110` runs `ln -sfn "$OUTPUT_DIR" /tmp/mib-dev-output`, but
+`/tmp/mib-dev-output` already exists as a *directory*. `ln -sfn` therefore creates a
+symlink **inside** it on each run rather than replacing it; it currently holds ~54
+stale entries. The advertised convenience path resolves to nothing. Fix is to remove
+the path before linking.
 
 ## Runtime
 
