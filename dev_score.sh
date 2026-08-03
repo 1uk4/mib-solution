@@ -106,7 +106,11 @@ mkdir -p "$OUTPUT_DIR"
 # Housekeeping: prune older run dirs > 1 hour old to avoid /tmp bloat
 find /tmp/mib-dev-runs -maxdepth 1 -type d -mmin +60 -exec rm -rf {} \; 2>/dev/null || true
 
-# Convenience symlink so tools that expect /tmp/mib-dev-output keep working
+# Convenience symlink so tools that expect /tmp/mib-dev-output keep working.
+# rm first: if the path already exists as a DIRECTORY, `ln -sfn` would drop
+# the new symlink INSIDE it instead of replacing it (bug found 2026-08-03 —
+# the path had been a dir of ~54 stale symlinks since Jul 30).
+rm -rf /tmp/mib-dev-output
 ln -sfn "$OUTPUT_DIR" /tmp/mib-dev-output
 
 if [ "${MIB_DOCKER:-0}" = "1" ]; then
