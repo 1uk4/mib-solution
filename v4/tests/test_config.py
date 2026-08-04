@@ -14,7 +14,8 @@ EXPECTED_TRUE = {
     "ocr_only_guard",
 }
 EXPECTED_FALSE = {"upgrade_unpaid_on_waiver", "defensive_downgrade",
-                  "fee_fuzzy_recovery"}
+                  "fee_fuzzy_recovery",
+                  "ocr_pool_psm11", "ocr_pool_rotations", "ocr_pool_deskew"}
 
 
 class TestDefaults:

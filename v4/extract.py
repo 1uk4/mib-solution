@@ -239,7 +239,213 @@ def extract_content(sources: list[Source], config: Config = CONFIG) -> list[Sour
                     src.content = _ocr_image_dual(src.raw, config)
             else:
                 src.content = _ocr_image(src.raw, config)
+            src.content = _apply_pool_passes(src.raw, src.content, config)
     return sources
+
+
+# ---------------------------------------------------------------------------
+# OCR pool-breadth variants (B2-12) — compositional, individually cached
+# ---------------------------------------------------------------------------
+
+# Gates read the token yield of the strategy output BEFORE pool additions,
+# so they are deterministic and independent of pool order. Chosen to target
+# the population each variant exists for; the variant itself is accepted or
+# rejected by full-score measurement, not by these constants.
+_POOL_TOKEN_RE = re.compile(r"[A-Za-z]{2,}")
+_ROTATION_GATE_TOKENS = 12   # near-nothing readable → try whole rotations
+_DESKEW_GATE_TOKENS = 40     # degraded-but-not-empty → try tilt correction
+
+# Geometry triggers (spot-derived 2026-08-03 from thumbnail statistics):
+# document pages are BRIGHT (coarse-grid ink 0.000-0.07); photos/portraits
+# are ink-heavy (>=0.15) and isotropic — no rotation ever yields a field
+# from them. Text pages are strongly row-dominant (row_var/col_var 1.5-32),
+# so a rotated text page is unmistakably column-dominant. Thresholds sit in
+# the wide gaps between those observed clusters.
+_POOL_INK_PHOTO_MIN = 0.15    # >= this: photo/noise → skip geometry passes
+_ROT_COL_DOMINANCE = 2.0      # col_var must beat row_var by this factor
+_ROT_VAR_FLOOR = 30.0         # and clear an absolute floor (blank pages
+                              # have near-zero variance on both axes)
+_DESKEW_MIN_ANGLE = 2         # degrees; 1-degree tilt barely hurts OCR
+# Deskew acceptance (spot-derived from the would-fire population): specks
+# on near-blank pages produce huge variance RATIOS on tiny baselines
+# (v0~5 -> best~28), while genuine tilted structure shows best_v 138-238.
+# Require absolute structure AND real improvement.
+_DESKEW_VAR_FLOOR = 100.0
+_DESKEW_MIN_RATIO = 1.5
+
+
+def _pool_token_count(content: str) -> int:
+    return len(_POOL_TOKEN_RE.findall(content)) if content else 0
+
+
+def _page_geometry(image_bytes: bytes) -> tuple[float, float, float]:
+    """(ink_fraction, row_var, col_var) from a small grayscale thumbnail.
+
+    Row/col ink profiles come from C-speed 1xH / Wx1 BOX resizes; ink
+    fraction from a 64x64 grid. Milliseconds per image; the whole point is
+    to buy a *reason* before paying for a Tesseract call.
+    """
+    if Image is None:
+        return (0.0, 0.0, 0.0)
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.load()
+        g = img.convert("L")
+        if g.width > 400:
+            g = g.resize((400, max(1, g.height * 400 // g.width)))
+        w, h = g.size
+        rows = list(g.resize((1, h), Image.BOX).getdata())
+        cols = list(g.resize((w, 1), Image.BOX).getdata())
+
+        def var(xs):
+            m = sum(xs) / len(xs)
+            return sum((x - m) ** 2 for x in xs) / len(xs)
+
+        px = list(g.resize((64, 64), Image.BOX).getdata())
+        ink = sum(1 for p in px if p < 200) / len(px)
+        return (ink, var(rows), var(cols))
+    except Exception:
+        return (0.0, 0.0, 0.0)
+
+
+def _apply_pool_passes(image_bytes: bytes, content: str,
+                       config: Config = CONFIG) -> str:
+    """Append enabled pool passes to the strategy output.
+
+    Compositional by design: each pass has its own cache entry, so adding
+    a pool member never invalidates the warm triple/dual/single caches.
+    Appended last — the union-order experiment (B2-7) measured order as
+    net-neutral, and append-last is the conservative end.
+    With all pool flags off (default) this is the identity.
+
+    Rotation/deskew fire only with a geometric REASON (thumbnail evidence,
+    milliseconds): a photo-heavy page gets neither; rotation needs a
+    column-dominant ink profile (text rows running vertically); deskew
+    needs a clear >=2-degree tilt. Token gates alone would pay full-price
+    Tesseract on ~1.4 evidence-free images per packet."""
+    parts = [content]
+    if config.ocr_pool_psm11:
+        t = _ocr_pool_psm11(image_bytes, config)
+        if t.strip():
+            parts.append(t)
+    if config.ocr_pool_rotations or config.ocr_pool_deskew:
+        yield_tokens = _pool_token_count(content)
+        want_rot = config.ocr_pool_rotations and yield_tokens < _ROTATION_GATE_TOKENS
+        want_dsk = config.ocr_pool_deskew and yield_tokens < _DESKEW_GATE_TOKENS
+        if want_rot or want_dsk:
+            ink, row_var, col_var = _page_geometry(image_bytes)
+            if ink < _POOL_INK_PHOTO_MIN:  # photo/noise pages: no geometry pass
+                if (want_rot and col_var > _ROT_COL_DOMINANCE * row_var
+                        and col_var > _ROT_VAR_FLOOR):
+                    t = _ocr_pool_rotations(image_bytes, config)
+                    if t.strip():
+                        parts.append(t)
+                if want_dsk:
+                    a, best_v, v0 = _skew_profile(image_bytes)
+                    if (abs(a) >= _DESKEW_MIN_ANGLE
+                            and best_v >= _DESKEW_VAR_FLOOR
+                            and best_v >= _DESKEW_MIN_RATIO * v0):
+                        t = _ocr_pool_deskew(image_bytes, config)
+                        if t.strip():
+                            parts.append(t)
+    return "\n".join(parts) if len(parts) > 1 else content
+
+
+def _ocr_pool_psm11(image_bytes: bytes, config: Config = CONFIG) -> str:
+    """Sparse-text pass (psm 11): finds isolated words block-segmentation
+    merges or drops — stamps, annotations, note fragments. Output order is
+    detection order, not reading order; safe in a pool, appended last."""
+    tag = "_p11" + _cache_config_tag(config)
+    cached = _cache_get(image_bytes, tag=tag, config=config)
+    if cached is not None:
+        return cached
+    result = _tesseract(image_bytes, psm=11, extra_flags=_user_words_flags(config))
+    _cache_put(image_bytes, result, tag=tag, config=config)
+    return result
+
+
+def _ocr_pool_rotations(image_bytes: bytes, config: Config = CONFIG) -> str:
+    """90/180/270 lossless rotations, psm 6 each, non-empty results joined.
+    Only called on near-empty pages (gate above) — a readable page never
+    pays for this."""
+    tag = "_rot" + _cache_config_tag(config)
+    cached = _cache_get(image_bytes, tag=tag, config=config)
+    if cached is not None:
+        return cached
+    uw = _user_words_flags(config)
+    parts = []
+    if Image is not None:
+        for tr in (Image.ROTATE_90, Image.ROTATE_180, Image.ROTATE_270):
+            png = _pil_png(image_bytes, lambda im, tr=tr: im.transpose(tr))
+            if png:
+                t = _tesseract(png, psm=6, extra_flags=uw)
+                if t.strip():
+                    parts.append(t)
+    result = "\n".join(parts)
+    _cache_put(image_bytes, result, tag=tag, config=config)
+    return result
+
+
+# Deskew estimation: on a correctly-aligned page, ink concentrates into
+# sharp horizontal rows, so the variance of row-ink-sums peaks at the true
+# correction angle. Row sums come from a C-speed 1xH BOX resize of a small
+# grayscale thumbnail — the whole 11-angle search costs milliseconds.
+_DESKEW_ANGLES = range(-5, 6)          # 1-degree steps
+_DESKEW_MARGIN = 1.05                  # best must beat 0-degrees by 5%
+
+
+def _skew_profile(image_bytes: bytes) -> tuple[int, float, float]:
+    """(best_angle, best_variance, zero_variance) from the row-ink profile."""
+    if Image is None:
+        return (0, 0.0, 0.0)
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.load()
+        g = img.convert("L")
+        if g.width > 400:
+            g = g.resize((400, max(1, g.height * 400 // g.width)))
+        h = g.height
+        best_a, best_v, v0 = 0, -1.0, 0.0
+        for a in _DESKEW_ANGLES:
+            r = g.rotate(a, fillcolor=255) if a else g
+            rows = list(r.resize((1, h), Image.BOX).getdata())
+            mean = sum(rows) / h
+            v = sum((x - mean) ** 2 for x in rows) / h
+            if a == 0:
+                v0 = v
+            if v > best_v:
+                best_v, best_a = v, a
+        return (best_a, best_v, v0)
+    except Exception:
+        return (0, 0.0, 0.0)
+
+
+def _estimate_skew_angle(image_bytes: bytes) -> int:
+    """Best small correction angle in degrees, or 0 if none clearly wins."""
+    best_a, best_v, v0 = _skew_profile(image_bytes)
+    if best_a != 0 and best_v > v0 * _DESKEW_MARGIN:
+        return best_a
+    return 0
+
+
+def _ocr_pool_deskew(image_bytes: bytes, config: Config = CONFIG) -> str:
+    """One corrective rotate + OCR when the profile clearly names a tilt.
+    Grayscale full-res rotate (white fill, expanded canvas) so no content
+    is cropped. Cached including the no-tilt empty result — the estimator
+    is deterministic, so the decision is too."""
+    tag = "_dsk" + _cache_config_tag(config)
+    cached = _cache_get(image_bytes, tag=tag, config=config)
+    if cached is not None:
+        return cached
+    result = ""
+    angle = _estimate_skew_angle(image_bytes)
+    if angle:
+        png = _pil_png(image_bytes, lambda im: im.convert("L").rotate(
+            angle, resample=Image.BICUBIC, fillcolor=255, expand=True))
+        if png:
+            result = _tesseract(png, psm=6, extra_flags=_user_words_flags(config))
+    _cache_put(image_bytes, result, tag=tag, config=config)
+    return result
 
 
 def _extract_text_stream(src: Source) -> str:

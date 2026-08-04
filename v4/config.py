@@ -45,6 +45,20 @@ class Config:
     # docstring's "dedicated block" never existed); 163 fallback cases are
     # fee-only-missing. Enum-snapped to paid/waived/unpaid like visa_class.
     fee_fuzzy_recovery: bool = False
+    # --- OCR pool-breadth variants (B2-12) — each OFF pending its own
+    # measurement. Compositional pool members: appended after the
+    # triple/dual/single strategy output, each cached under its own tag so
+    # enabling one never invalidates the existing warm caches.
+    # psm 11 = sparse-text mode: hunts isolated words (stamps, annotations,
+    # note fragments) that block-segmentation merges or drops. All images.
+    ocr_pool_psm11: bool = False
+    # 90/180/270 lossless rotations, gated to pages whose pooled text is
+    # near-empty — targets fully-rotated embedded content.
+    ocr_pool_rotations: bool = False
+    # Projection-profile deskew (PIL-only): estimate small tilt from the
+    # row-ink profile, one corrective rotate + OCR when |angle| >= 1 deg.
+    # Gated to degraded (low-yield) pages.
+    ocr_pool_deskew: bool = False
 
     # --- L7 policy ---
     # Adjudicator-finding trust bypass. Evidence precedence #1 per the Field
