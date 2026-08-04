@@ -177,6 +177,32 @@ reactivate exactly when upstream OCR degrades — e.g. the container's
 different tesseract (B2-4), the one environment we cannot cheaply
 measure from the host.
 
+## B2-12 — OCR pool breadth: three variants built, one accepted (CLOSED)
+
+Compositional pool passes (each cached under its own tag; enabling one
+never invalidates warm caches), measured 2026-08-03 on the full 1000:
+
+- **psm 11 sparse-text — ACCEPTED, default ON** (freeze f87a3c6):
+  118.56 total (+0.48), train +0.371 / val +0.898 (val outgained train),
+  cat FAs flat, 107 fields fixed vs 14 broken, ~+0.2 s/pdf in docker.
+- **Rotations (90/180/270) — REJECTED at ceiling**: ungated run +0.02
+  (noise), 7 field changes in 1000 packets, 0 verdicts. The
+  evidence-triggered version (photo veto + column-dominance) fires 0
+  times in 30 packets — no measurable basis to ship. The corpus's
+  rotated text lives in stamps within pages, out of reach of whole-page
+  rotation.
+- **Deskew — REJECTED at ceiling**: ungated run −0.01, 23 recoveries
+  nearly cancelled by 12 breakages, and its one verdict change knocked a
+  true DENIED into the fallback bucket. Trigger machinery (structure
+  floor 100 + ratio 1.5 + angle ≥2°, spot-derived) retained as
+  documented capability, flag off.
+
+Side finding worth keeping: two psm11 verdict losses (MIB-000092/000933)
+came from `ocr_revoked_sponsor` reaching cases via guard #1, which lacks
+the fallback path's 17%-precision prefix exclusion — the exclusion
+asymmetry between the two call sites is now measurable. One-line,
+separately-measurable follow-up.
+
 ## B2-5 — Guard confidences are shared, not measured per-guard
 
 `ocr_only_downgrade`, `field_conflict`, `missing_required`, and

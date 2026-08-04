@@ -1,12 +1,14 @@
 # MIB Doc Challenge — Technical Memo
 
-**Training set: ⟨118.56⟩ / 150** (official `evaluate.py`, all 1,000 labeled
-packets, run inside the shipped Docker image). Train/val split (800/200,
-fixed seed): **⟨118.46 / 118.94⟩**. Catastrophic false approvals: **15**,
-unchanged across every configuration ever shipped. Runtime:
-**⟨~3.6⟩ s/PDF** single container at 4 vCPU against the 6 s budget.
-Fully offline: Python stdlib + Pillow + Tesseract. No models, no network,
-no LLM/VLM anywhere.
+**Training set: 118.56 / 150** (official `evaluate.py`, all 1,000 labeled
+packets). Train/val split (800/200, fixed seed): **118.46 / 118.94** —
+the held-out fifth scores *higher* than the fitted portion. Catastrophic
+false approvals: **15**, unchanged across every configuration ever
+shipped. Runtime: **3.5 s/PDF measured under the full grading harness**
+(one container, `--cpus 4 --memory 8g --read-only`, tmpfs `/tmp`) against
+the 6 s budget — ~17,500 s projected for the 5,000-PDF validation set vs
+the 30,000 s hard limit. Fully offline: Python stdlib + Pillow +
+Tesseract. No models, no network, no LLM/VLM anywhere.
 
 ## Architecture: establish what the packet says, then decide
 
@@ -69,8 +71,9 @@ val), cat-FA count, and per-case diff attribution. Accepted: the psm 11
 pool pass (+0.37 train / +0.90 val — val outgaining train). Rejected and
 retained as documented negatives: fee-label fuzzy recovery (train +0.11 /
 val −0.09, and 83% of fee-missing packets carry no fee text at all),
-threshold changes to safety guards, and every rule keyed on absence of
-evidence. The dominant residual loss is measured to be *evidence-absent*:
+whole-page rotation and deskew pool passes (measured at their ungated
+ceilings: +0.02 and −0.01 — the evidence isn't there), threshold changes
+to safety guards, and every rule keyed on absence of evidence. The dominant residual loss is measured to be *evidence-absent*:
 risk panels and fee receipts removed by the generator (the two fields are
 95% of extraction loss), and ~15 denials whose disqualifying flag appears
 nowhere visible — priced honestly rather than guessed at.
@@ -86,7 +89,7 @@ bounded by evidence, not calibration.
 ## Reproducibility
 
 `git clone` → `docker build` → run; entrypoint is the contract's
-`<input_dir> <output_path>`. 154 unit tests; committed golden outputs
-with a byte-parity gate (`tools`); every measurement in the memo has a
-committed script and report under `v3/dev/analysis/` and dated entries
-in `v4/OBSERVATIONS.md`.
+`<input_dir> <output_path>`. 155 unit tests; committed golden outputs
+with a byte-parity gate (`parity.sh`); every measurement in the memo has
+a committed script under `v3/dev/analysis/` and a dated entry in
+`v4/OBSERVATIONS.md` — accepted and rejected experiments alike.
