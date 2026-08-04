@@ -27,4 +27,4 @@ The live pipeline is `v4/` (standalone; the Docker image ships it alone).
 `docs/TECHNICAL_DEBRIEF.md` is the design document;
 `docs/TECHNICAL_MEMO.md` the layer-by-layer engineering review;
 `v4/OBSERVATIONS.md` the dated ledger of every measured experiment,
-accepted and rejected. Tests: `python3 -m pytest v4/tests` (155).
+accepted and rejected. Tests: `python3 -m pytest v4/tests` (159).

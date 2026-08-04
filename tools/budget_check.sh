@@ -3,7 +3,7 @@
 # pinned to 4 vCPUs like the grading environment. Reports s/pdf and the
 # 5,000-PDF extrapolation vs the 30,000s hard limit.
 set -euo pipefail
-cd "$( dirname "${BASH_SOURCE[0]}" )"
+cd "$( dirname "${BASH_SOURCE[0]}" )/.."
 
 CHALLENGE="${MIB_CHALLENGE_DIR:-$HOME/Code/mib-doc-challenge}"
 VAL="$CHALLENGE/data/validation"

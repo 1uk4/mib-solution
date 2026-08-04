@@ -13,10 +13,10 @@ mib-solution/
 ├── solution.py          # thin dispatcher — imports active version
 ├── score.sh             # production scoring: full docker constraints on 1000 PDFs
 ├── dev_score.sh         # dev scoring: native mode w/ OCR cache, ~2 min run
-├── parity.sh            # byte-parity gate vs golden/ (native|docker)
-├── golden/              # committed reference outputs from v3 @ 92eb104
+├── tools/               # parity gate, sharded validation runner, budget probe
+├── golden/              # committed reference outputs (byte-parity gates)
 ├── v1/, v2/, v3/        # FROZEN — prior versions, kept as reference; not shipped
-└── v4/                  # ACTIVE — standalone layered pipeline (118.08 / 150)
+└── v4/                  # ACTIVE — standalone layered pipeline (118.56 / 150)
     │
     │  === FOUNDATION (read by every layer) ===
     ├── config.py        # ALL feature flags — one frozen dataclass
@@ -45,7 +45,7 @@ mib-solution/
     ├── evidence.py      # shared readers: OCR signal + biometric slip
     ├── solution.py      # driver: main() loop, progress logging
     ├── OBSERVATIONS.md  # bucket-2/3 ledger for the next phase
-    └── tests/           # 141 tests (incl. per-stage L7 isolation)
+    └── tests/           # 159 tests (incl. per-stage L7 isolation)
 ```
 
 Dev tooling and measured history live in `v3/dev/` (analysis scripts,
@@ -55,8 +55,8 @@ The reviewer-facing design document is `docs/TECHNICAL_DEBRIEF.md`.
 ## Active version
 
 `solution.py` dispatches to `v4.solution`. v4 imports nothing from
-v1/v2/v3 — the Docker image ships `v4/` alone, and behavior is
-byte-identical to v3 @ `92eb104` (verify anytime with `./parity.sh`).
+v1/v2/v3 — the Docker image ships `v4/` alone. Any change is gated
+against the committed goldens with `tools/parity.sh`.
 
 ## Run
 

@@ -12,7 +12,7 @@
 #   N_SHARDS default 6. LIMIT = smoke mode: only the first LIMIT PDFs,
 #   validated against a filtered manifest, separate work/output dirs.
 set -euo pipefail
-cd "$( dirname "${BASH_SOURCE[0]}" )"
+cd "$( dirname "${BASH_SOURCE[0]}" )/.."
 
 N="${1:-6}"
 LIMIT="${2:-}"

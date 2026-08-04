@@ -7,7 +7,7 @@
 #   ./parity.sh native  [predictions.jsonl]   default: newest /tmp/mib-dev-runs/<run>/
 #   ./parity.sh docker  [predictions.jsonl]   default: /tmp/mib-output/predictions.jsonl
 set -euo pipefail
-cd "$( dirname "${BASH_SOURCE[0]}" )"
+cd "$( dirname "${BASH_SOURCE[0]}" )/.."
 
 MODE="${1:?usage: parity.sh native|docker [predictions.jsonl]}"
 case "$MODE" in
