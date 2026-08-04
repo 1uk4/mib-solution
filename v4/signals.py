@@ -428,6 +428,11 @@ def _fuzzy_flags_from_ocr(text: str) -> str:
 # Whole-string anchored regexes — reject values with any trailing garbage.
 # Names (alien Firstname Lastname): 2+ capitalized words, letters only.
 _NAME_RE = re.compile(r"^[A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)+$")
+# Arrival dates: the scorer requires dashed YYYY-MM-DD. Python 3.11+
+# date.fromisoformat() also accepts dashless '20260527' (and even
+# '20260702 7'), so fromisoformat alone is NOT a format gate — two
+# validation-set packets leaked exactly that on 2026-08-03.
+_ARRIVAL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # Purposes: 1+ lowercase words separated by single spaces.
 _PURPOSE_RE = re.compile(r"^[a-z]+(?: [a-z]+)*$")
 # Sponsor ID: strict SPN-#### format (belt-and-suspenders; the canonical
@@ -644,6 +649,8 @@ def _valid_field_value(key: str, value: str) -> bool:
         return False
 
     if key == "arrival_date":
+        if not _ARRIVAL_DATE_RE.match(v):
+            return False
         try:
             Date.fromisoformat(v)
         except (ValueError, TypeError):

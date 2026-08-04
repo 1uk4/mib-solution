@@ -136,3 +136,24 @@ class TestGating:
         # v3 intent: MIB_NORMALIZE_VALUES=1 -> _norm normalizes
         assert _norm("home_world", "Wolf-106 1c.",
                      Config(normalize_values=True)) == "Wolf-1061c"
+
+
+class TestArrivalDateFormatGate:
+    """Python 3.11+ fromisoformat accepts dashless dates; the scorer does
+    not. Regression for the 2026-08-03 validation-set leak."""
+
+    def test_dashless_date_rejected(self):
+        from v4.signals import _valid_field_value
+        assert not _valid_field_value("arrival_date", "20260527")
+
+    def test_date_with_trailing_garbage_rejected(self):
+        from v4.signals import _valid_field_value
+        assert not _valid_field_value("arrival_date", "20260702 7")
+
+    def test_dashed_date_accepted(self):
+        from v4.signals import _valid_field_value
+        assert _valid_field_value("arrival_date", "2026-05-27")
+
+    def test_dashed_invalid_calendar_date_rejected(self):
+        from v4.signals import _valid_field_value
+        assert not _valid_field_value("arrival_date", "2026-13-45")
