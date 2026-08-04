@@ -20,16 +20,22 @@ land in one undifferentiated tag that is wrong roughly two times in three,
 emitted at confidence 0.34. Every L7 guard the brief debates concerns tens
 of cases; this concerns 251.
 
-Almost certainly several distinct populations sharing one tag and one
-confidence value. Splitting it is a **calibration** win before it is ever a
-classification win (Brier is scored per-case; a well-split bucket lowers
-Brier even if no verdict changes).
+**Measured 2026-08-03 (L6 census) — the obvious split axis is dead:**
+partitioning by which extraction failed gives fee-only-missing 163 @ 35%,
+both-missing 53 @ 28%, visa-only-missing 35 @ 26% — statistically
+indistinguishable from the pooled 32%; sub-tagging would move Brier by
+almost nothing. The original "distinct populations" hypothesis is NOT
+supported along this axis.
 
-*Counterfactual to measure:* partition by which extraction failed
-(visa-only / fee-only / both / other) and measure per-partition accuracy on
-`/tmp/mib-features.jsonl` after regenerating features against v4.
+What the decomposition found instead: **65% of the bucket is
+fee-only-missing, and 44% of those are truth-APPROVED** — approvable
+packets whose fee receipt didn't extract while everything else read
+fine. The value axis is fee-extraction recovery (cases then flow to real
+rules), not confidence splitting. Inverse signal: visa-missing packets
+skew DENIED (43%). Remaining split candidates if ever revisited:
+OCR-signal presence, illegibility bit, image count — not missing-field.
 
-*Where:* `v4/rules.py` (emission), `v4/confidence.py` (values).
+*Where:* `v4/signals.py` fee extraction (recovery), not `v4/rules.py`.
 
 ## B2-2 — Crash path reuses extraction-failure confidence
 

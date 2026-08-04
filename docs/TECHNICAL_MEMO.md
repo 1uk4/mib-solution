@@ -221,6 +221,32 @@ the same dict shape as populated ones — no None-vs-dict fork for
 consumers. All output-inert; 141 tests, 27/27 spot parity. Census:
 `v3/dev/analysis/consolidate_census.py`.
 
-## L6 — rules.py (pending)
+## L6 — rules.py: evidence becomes a verdict
+
+**Job:** strict-priority chain of 15 rules; first match returns
+(verdict, confidence, tag). The ordering is the policy: adjudicator
+finding trumps all (162 cases, 100%); standalone hard-denies fire on
+minimum sufficient evidence BEFORE the extraction fallback (a half-read
+packet can still be denied on the readable half); the review ladder has
+R_R1 above the fallback purely for calibration (same verdict, 94% vs
+34% bucket); approve tail only reachable with full extraction and no
+flags. Every confidence is a registry lookup — the chain cannot emit an
+uncalibrated number.
+
+**Census (2026-08-03):** all fire counts match the registry (one
+metadata drift: R_R2 24→20 post-reorder, still 100%). The "unreachable"
+final line: 0 hits — confirmed dead, kept as floor. Shadow matrix: the
+finding trump rescues 84 would-be fallback cases and 76 would-be R_R1;
+49 packets have multiple deny conditions true — order shifts tag credit
+only (all 0.96–0.99), so the deny block is order-insensitive in effect.
+
+**FALLBACK decomposition (B2-1 revised):** the missing-field axis does
+NOT split the bucket (35/28/26% vs pooled 32%). Instead: 65% of the
+bucket is fee-only-missing and 44% of those are truth-APPROVED — the
+improvement axis is fee-extraction recovery, not confidence splitting.
+Visa-missing skews DENIED (43%).
+
+**Review outcome:** no code changes — the cleanest layer. Census:
+`v3/dev/analysis/rules_census.py`.
 
 ## L7 — policy/ (pending)
