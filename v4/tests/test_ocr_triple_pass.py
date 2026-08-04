@@ -40,8 +40,7 @@ def _doc_source(raw: bytes) -> Source:
     """A Source whose metadata passes _should_ocr AND _looks_like_document."""
     return Source(
         type=IMAGE, id="image_0", raw=raw,
-        metadata={"width": 1224, "height": 1584,
-                  "mean_brightness": 250.0, "brightness_std": 50.0},
+        metadata={"width": 1224, "height": 1584},
     )
 
 

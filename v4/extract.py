@@ -171,21 +171,15 @@ def _cache_put(image_bytes: bytes, text: str, tag: str = "",
 # Pre-OCR skip gate
 # ---------------------------------------------------------------------------
 
-# Thresholds chosen to be safe: only skip when confidence of "no text" is
-# very high. A truly blank canvas is BOTH uniform-mean AND uniform-variance.
-# Text documents have high mean (white bg) but ALSO high variance (dark text
-# pixels), so requiring BOTH conditions is necessary to avoid skipping real
-# text like FORM B-13 biometric slips or adjudicator notes.
 _MIN_DIMENSION = 100          # below this → icon/divider/watermark
-_BLANK_MEAN_HIGH = 240        # above this AND low std → nearly-white canvas
-_BLANK_MEAN_LOW = 20          # below this AND low std → nearly-black canvas
-_BLANK_STD_MAX = 3            # low std → nearly-uniform pixels; sparse
-                              # adjudicator notes have std ~5-15, so any
-                              # threshold above ~3 risks skipping real content
 
 
 def _should_ocr(source: Source) -> bool:
-    """Return False for images obviously without text. Safe skips only."""
+    """Return False for images obviously without text. Safe skips only.
+
+    Blank-canvas rule removed 2026-08-03: 0 fires in 4,079 training
+    images. The <100px rule is free and fails safe, so it stays.
+    """
     if source.type != IMAGE:
         return True
     m = source.metadata
@@ -195,13 +189,6 @@ def _should_ocr(source: Source) -> bool:
         return True  # unknown metadata → be safe
     if max(w, h) < _MIN_DIMENSION:
         return False
-    # Both mean AND std must be blank-like to skip.
-    # Text documents have mean ~250 but std ~50+ (from text pixels).
-    brightness = m.get("mean_brightness", 128)
-    std_dev = m.get("brightness_std", 100)
-    if std_dev < _BLANK_STD_MAX:
-        if brightness > _BLANK_MEAN_HIGH or brightness < _BLANK_MEAN_LOW:
-            return False
     return True
 
 
@@ -209,25 +196,20 @@ def _should_ocr(source: Source) -> bool:
 # Document-shape gate: which images get dual-pass OCR?
 # ---------------------------------------------------------------------------
 
-# Real rendered documents in this dataset are letter-size (~1224×1584) with
-# bright backgrounds. Stamps / photos / decorative elements are smaller and
-# darker. The dual-pass config (psm=3 + 2x upscale) is worth the extra ~1s
-# only for actual documents — it doesn't help on non-text imagery and
-# doubles OCR compute across the whole packet if fired indiscriminately.
+# Real rendered documents in this dataset are letter-size (~1224×1584);
+# stamps / photos / decorative elements are smaller. The multi-pass config
+# (psm=3 + 2x upscale, sharpen) is worth the extra ~1s only for actual
+# documents — it doesn't help on non-text imagery and doubles OCR compute
+# across the whole packet if fired indiscriminately.
 _DOC_MIN_DIMENSION = 800
-_DOC_MIN_BRIGHTNESS = 80    # below this → photo, not a bright document page
 
 
 def _looks_like_document(source: Source) -> bool:
-    """Return True if this image is likely a rendered document worth dual-pass OCR.
+    """True if the image is likely a rendered document worth multi-pass OCR.
 
-    Heuristic based on empirical measurement of the training set: L1-L5
-    classified sources are uniformly large (>=800px in the long dimension)
-    with bright backgrounds. Non-doc content (photos, stamps) is smaller
-    or darker.
-
-    Approved gate: needs both PIL available (for upscale) and letter-shaped
-    bright dimensions.
+    Dimension is the whole gate — empirically identical to "is a JPEG" on
+    training. Brightness veto removed 2026-08-03: 0 fires in 4,079 images.
+    Needs PIL for the upscale pass, hence the Image guard.
     """
     if Image is None:
         return False
@@ -235,9 +217,6 @@ def _looks_like_document(source: Source) -> bool:
     w = m.get("width", 0) or 0
     h = m.get("height", 0) or 0
     if max(w, h) < _DOC_MIN_DIMENSION:
-        return False
-    brightness = m.get("mean_brightness", 128)
-    if brightness < _DOC_MIN_BRIGHTNESS:
         return False
     return True
 

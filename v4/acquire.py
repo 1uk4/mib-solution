@@ -76,23 +76,33 @@ class Source:
 
 JPEG_MAGIC = b"\xff\xd8\xff"
 
+# Stream-dict entry patterns, precompiled once (called per image stream).
+_DICT_INT_RES = {
+    key: re.compile(rb"/" + key + rb"\s+(\d+)")
+    for key in (b"Width", b"Height")
+}
+_DICT_NAME_RES = {
+    key: re.compile(rb"/" + key + rb"\s+/(\w+)")
+    for key in (b"ColorSpace",)
+}
+
 
 def _dict_int(dict_bytes: bytes, key: bytes) -> int | None:
-    m = re.search(rb"/" + key + rb"\s+(\d+)", dict_bytes)
+    m = _DICT_INT_RES[key].search(dict_bytes)
     return int(m.group(1)) if m else None
 
 
 def _dict_name(dict_bytes: bytes, key: bytes) -> bytes | None:
-    m = re.search(rb"/" + key + rb"\s+/(\w+)", dict_bytes)
+    m = _DICT_NAME_RES[key].search(dict_bytes)
     return m.group(1) if m else None
 
 
 def _image_meta(image_bytes: bytes) -> dict:
-    """Cheap image metadata — dimensions, mode, mean brightness.
+    """Header-only metadata. width/height feed L2's gates; bytes/mode are
+    audit-only. Absent keys must fail toward "do OCR".
 
-    Mean brightness is sampled (every 32nd pixel of a 4x-downscaled grayscale
-    version) so the computation is O(image_area / ~512), not O(pixels). Used
-    by L2's skip gate to detect blank canvases (brightness > 245 or < 15).
+    Brightness stats removed 2026-08-03: 0 gate decisions in 4,079
+    training images, at a full pixel decode per image.
     """
     meta = {"bytes": len(image_bytes)}
     if Image is None:
@@ -104,26 +114,7 @@ def _image_meta(image_bytes: bytes) -> dict:
             "width": w,
             "height": h,
             "mode": img.mode,
-            "letter_sized": max(w, h) >= 1000,
-            "small_square": w == h and max(w, h) <= 600,
         })
-        # Cheap brightness stats: downscale to ~128px, then compute mean +
-        # standard deviation. Both are needed to distinguish:
-        #   blank white  (mean ~250, std ~2)   — safe to skip
-        #   text on white (mean ~250, std ~50) — MUST OCR, high info
-        #   photo/portrait (mean ~180, std ~40) — moderate info
-        try:
-            small = img.convert("L")
-            if max(small.size) > 128:
-                small.thumbnail((128, 128))
-            pixels = list(small.getdata())
-            if pixels:
-                mean = sum(pixels) / len(pixels)
-                var = sum((p - mean) ** 2 for p in pixels) / len(pixels)
-                meta["mean_brightness"] = round(mean, 1)
-                meta["brightness_std"] = round(var ** 0.5, 1)
-        except Exception:
-            pass
     except Exception:
         pass
     return meta
@@ -190,7 +181,8 @@ def _extract_image_bytes(dict_bytes: bytes, stream_data: bytes) -> bytes | None:
 def _is_image_stream(dict_bytes: bytes) -> bool:
     """A stream is treated as an image if it's tagged /Subtype /Image or
     uses an image codec filter (DCT / CCITTFax). Text streams may also use
-    FlateDecode, so we can't use that alone."""
+    FlateDecode, so we can't use that alone. CCITT: 0 occurrences in
+    training; would fail safe (dropped as undecodable image)."""
     return (
         b"/Subtype /Image" in dict_bytes
         or b"DCTDecode" in dict_bytes

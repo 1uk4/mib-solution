@@ -65,6 +65,34 @@ bucket is where degraded extraction lands.
 a rule boundary (e.g. fee_status flips between paid/unpaid across engines).
 Bounds how much host-measured tuning can be trusted.
 
+## B2-6 — Brightness statistics: measured, found decisionless, REMOVED
+
+Measured 2026-08-03 over all 4,079 training images, then acted on
+(the first bucket-2 item resolved by measurement):
+
+- **The `_should_ocr` blank-canvas rule never fired** — zero blank
+  canvases in the corpus (and zero sub-100px images for the tiny rule).
+- **The doc gate's brightness veto never fired** — every ≥800px image is
+  bright. On this corpus `_looks_like_document` is EXACTLY "is a JPEG"
+  (1,956 = the DCTDecode count; 0 mismatches on an 846-image sample):
+  documents ship as big JPEG scans, photos/stamps as small Flate-raws.
+  The dimension test alone does all discrimination.
+- Brightness stats forced a full pixel decode per image: ~8.4 ms/image
+  ≈ 34 ms/PDF ≈ 1% of the container budget, for zero decisions.
+
+**Decision (user call): removed.** `_image_meta` now reads header
+dimensions only; both gates are dimension-only, each carrying a short
+"existed through v3, measured 0 fires / 4,079, removed" note — the record
+lives in the code where the next reader will look. The costless tiny-image
+rule stays (a decoy icon would waste an OCR call, not lose evidence).
+
+Eval-set delta accepted with eyes open: a hypothetical blank canvas now
+gets OCR'd (wasted ~0.3s, empty text, no extraction impact) and a
+hypothetical dark ≥800px photo now gets triple-pass instead of single
+(more compute, strictly more OCR text). Both fail toward MORE evidence;
+runtime headroom is 2×. Verified training-identical: the removed branches
+had zero fires, mini-parity clean.
+
 ## B2-5 — Guard confidences are shared, not measured per-guard
 
 `ocr_only_downgrade`, `field_conflict`, `missing_required`, and
