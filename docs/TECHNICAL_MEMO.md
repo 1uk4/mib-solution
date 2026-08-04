@@ -104,7 +104,44 @@ No composition changes shipped — parity preserved.
 
 ---
 
-## L3 — filters/ (pending)
+## L3 — filters/: the trust boundary
+
+**Job:** decide evidence admissibility, exactly once. Two filter
+families: **sanitizers** mutate content in place (strip adversarial
+substrings, source stays trusted — line-level surgery because mixed
+streams like MIB-000115 carry real fields *and* injection); **detectors**
+exclude whole sources (`trusted=False` + reason, first hit wins).
+Sanitizers run first so a source is never condemned for content that
+cleaning would have removed.
+
+**Injection** (sanitizer): drop any line containing one of 8 markers.
+Principle: an embedded instruction is not a data value. Measured: fires
+on **98% of packets** (`SYSTEM:` lines are ambient), 1,321 lines dropped,
+never via image OCR.
+
+**Redaction** (sanitizer): strip bracketed ALL-CAPS placeholders +
+`REDACTED?`. Measured: 268 sources, **197 via image OCR**. Mixed-case
+brackets pass by design; L4's `_reject_placeholder` is the second lock —
+**9 genuine catches** post-sanitization on training, so the depth is
+real, not redundant. (`SPONSOR_ATTESTS_RE`'s placeholder alternative:
+0 matches — vestigial, harmless.)
+
+**Illegibility** (detector, images only): domain-vocab real-word ratio
+< 0.30 with ≥5 tokens ⇒ exclude. Domain vocabulary, not a dictionary —
+a general wordlist over-matches OCR garbage. Measured: **780/4,079
+images excluded (19%)**; 703 auto-kept (<5 tokens); ~1,377 empty-OCR.
+**249 images (6.1%) sit within ±0.05 of the threshold** — the knife-edge
+mass behind cross-environment drift (B2-8): engine-version OCR changes
+flip borderline exclusions, cascading into signals and the
+`any_illegibility_excluded` bit L7 reads. Threshold untouchable per
+brief Rule 4.
+
+**Review outcome (2026-08-03):** sanitizer audit strings — previously
+computed and discarded — now land in `metadata["sanitize_audit"]`
+(output-inert, feeds inspection tooling); sanitizer docstrings corrected
+to the actual (should_exclude, audit_reason) contract, with measured
+fire rates noted. No threshold or logic changes (Rule 4). Census script:
+`v3/dev/analysis/filter_census.py`.
 
 ## L4 — signals.py (pending)
 

@@ -37,8 +37,11 @@ _REDACTION_RE = re.compile(
 def sanitize_redactions(source: Source) -> tuple[bool, str]:
     """Remove redaction markers from source.content in place.
 
-    Returns (was_modified, reason) — matches Sanitizer signature.
-    Source stays trusted; only content changes.
+    Returns (should_exclude, audit_reason) — should_exclude is always
+    False for a sanitizer; audit_reason is non-empty iff content changed.
+    Fires mostly via image OCR (197 of 268 firing sources on training).
+    Mixed-case bracket lines pass through by design; L4's
+    _reject_placeholder is the second lock (9 catches on training).
     """
     if not source.content:
         return False, ""

@@ -116,6 +116,24 @@ full-score granularity:
 value directly. No code change this phase — every variant is ≤ noise or
 a lever we don't need; parity preserved.
 
+## B2-8 — Illegibility threshold: 6.1% of images sit on the knife edge
+
+Census 2026-08-03 (4,079 images): 780 excluded at ratio < 0.30; **249
+images (6.1%) fall within ±0.05 of the cutoff**. OCR-engine version drift
+(B2-4) moves ratios slightly, so borderline images flip exclusion across
+environments — cascading into signal counts, field values, and the
+`any_illegibility_excluded` bit L7 reads. Likely a real component of the
+145-row host/docker delta.
+
+Not actionable (brief Rule 4: filter thresholds are off-limits) — logged
+as the known sensitivity behind cross-environment drift, for the debrief.
+Also measured: injection sanitizer fires on 98% of packets (SYSTEM: lines
+are ambient); redaction fires mostly via image OCR (197/268); L4's
+placeholder check is genuine defense-in-depth (9 post-sanitization
+catches — mixed-case brackets redaction deliberately ignores);
+`SPONSOR_ATTESTS_RE`'s `[SPONSOR ID BLANK]` alternative: 0 matches
+post-sanitization (vestigial from pre-L3 v1, harmless).
+
 ## B2-5 — Guard confidences are shared, not measured per-guard
 
 `ocr_only_downgrade`, `field_conflict`, `missing_required`, and

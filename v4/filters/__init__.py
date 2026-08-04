@@ -54,11 +54,16 @@ DETECTORS: list[tuple[str, Detector]] = [
 
 
 def apply_filters(sources: list[Source]) -> list[Source]:
-    """Run sanitizers then detectors against every source (mutates in place)."""
+    """Run sanitizers then detectors against every source (mutates in place).
+
+    Sanitizer audit reasons are kept in metadata["sanitize_audit"] for
+    inspection tooling; they never reach the output row."""
     for src in sources:
         # Sanitize first — modifies content
         for _name, sanitizer in SANITIZERS:
-            sanitizer(src)
+            _, audit = sanitizer(src)
+            if audit:
+                src.metadata.setdefault("sanitize_audit", []).append(audit)
         # Then detect — may mark untrusted
         for name, detector in DETECTORS:
             is_adversarial, reason = detector(src)

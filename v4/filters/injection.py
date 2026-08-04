@@ -19,9 +19,10 @@ from v4.patterns import INJECTION_MARKERS
 def sanitize_injection(source: Source) -> tuple[bool, str]:
     """Remove injection lines from source.content in place.
 
-    Returns (was_modified, reason) for audit — matches Detector signature
-    so it can share the same registration mechanism in filters/__init__.py.
-    Even when modified, the source stays trusted.
+    Returns (should_exclude, audit_reason) — should_exclude is always
+    False for a sanitizer; audit_reason is non-empty iff lines were
+    dropped. Fires on ~98% of packets (SYSTEM: lines are ambient in this
+    corpus), never on image OCR.
     """
     if not source.content:
         return False, ""
