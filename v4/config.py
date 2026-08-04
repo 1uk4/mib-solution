@@ -51,7 +51,9 @@ class Config:
     # enabling one never invalidates the existing warm caches.
     # psm 11 = sparse-text mode: hunts isolated words (stamps, annotations,
     # note fragments) that block-segmentation merges or drops. All images.
-    ocr_pool_psm11: bool = False
+    # ACCEPTED 2026-08-03: +0.371 train / +0.898 val (val outgained train),
+    # cat FAs flat, 107 fields fixed vs 14 broken, ~+0.3 s/pdf.
+    ocr_pool_psm11: bool = True
     # 90/180/270 lossless rotations, gated to pages whose pooled text is
     # near-empty — targets fully-rotated embedded content.
     ocr_pool_rotations: bool = False

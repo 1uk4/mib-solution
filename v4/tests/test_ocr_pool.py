@@ -26,15 +26,30 @@ HIGH_YIELD = "word " * 60          # 60 tokens — above both gates
 LOW_YIELD = "one two"              # 2 tokens — below both gates
 
 
+# psm11 is default-ON (accepted 2026-08-03); rotation/deskew tests isolate
+# it explicitly so each trigger is exercised alone.
+_NO_PSM11 = {"ocr_pool_psm11": False}
+
+
 class TestIdentityWhenOff:
-    def test_default_config_is_identity(self, monkeypatch):
+    def test_all_pool_flags_off_is_identity(self, monkeypatch):
         calls = []
         monkeypatch.setattr(extract, "_tesseract",
                             lambda *a, **k: calls.append(1) or "")
         raw = _png(lambda d: None)
-        out = _apply_pool_passes(raw, HIGH_YIELD, Config())
+        out = _apply_pool_passes(raw, HIGH_YIELD, Config(**_NO_PSM11))
         assert out == HIGH_YIELD
         assert calls == []
+
+    def test_default_config_appends_psm11_only(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(extract, "_tesseract",
+                            lambda b, psm=6, extra_flags=None:
+                            seen.append(psm) or "SPARSE")
+        raw = _png(lambda d: None)
+        out = _apply_pool_passes(raw, HIGH_YIELD, Config())
+        assert seen == [11]
+        assert out.startswith(HIGH_YIELD) and out.endswith("SPARSE")
 
 
 class TestPsm11:
@@ -55,7 +70,7 @@ class TestRotationTrigger:
         monkeypatch.setattr(extract, "_tesseract",
                             lambda *a, **k: calls.append(1) or "x")
         raw = _png(lambda d: None)
-        out = _apply_pool_passes(raw, HIGH_YIELD, Config(ocr_pool_rotations=True))
+        out = _apply_pool_passes(raw, HIGH_YIELD, Config(ocr_pool_rotations=True, **_NO_PSM11))
         assert calls == [] and out == HIGH_YIELD
 
     def test_no_rotation_on_horizontal_text_page(self, monkeypatch):
@@ -66,7 +81,7 @@ class TestRotationTrigger:
                             lambda *a, **k: calls.append(1) or "x")
         raw = _png(lambda d: [d.line((20, y, 380, y), fill=0, width=3)
                               for y in range(40, 280, 30)])
-        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True))
+        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True, **_NO_PSM11))
         assert calls == [] and out == LOW_YIELD
 
     def test_rotations_fire_on_column_dominant_page(self, monkeypatch):
@@ -79,7 +94,7 @@ class TestRotationTrigger:
                             seen.append(psm) or "ROT")
         raw = _png(lambda d: [d.line((x, 20, x, 280), fill=0, width=2)
                               for x in range(60, 380, 60)])
-        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True))
+        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True, **_NO_PSM11))
         assert seen == [6, 6, 6]          # three rotations
         assert "ROT" in out
 
@@ -89,7 +104,7 @@ class TestRotationTrigger:
         monkeypatch.setattr(extract, "_tesseract",
                             lambda *a, **k: calls.append(1) or "x")
         raw = _png(lambda d: d.rectangle((0, 0, 400, 300), fill=90))
-        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True))
+        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True, **_NO_PSM11))
         assert calls == [] and out == LOW_YIELD
 
     def test_no_rotation_on_blank_page(self, monkeypatch):
@@ -98,7 +113,7 @@ class TestRotationTrigger:
         monkeypatch.setattr(extract, "_tesseract",
                             lambda *a, **k: calls.append(1) or "x")
         raw = _png(lambda d: None)
-        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True))
+        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_rotations=True, **_NO_PSM11))
         assert calls == [] and out == LOW_YIELD
 
     def test_gate_constants_ordering(self):
@@ -120,7 +135,7 @@ class TestDeskewTrigger:
         tilted = img.rotate(3, fillcolor=255)
         buf = io.BytesIO(); tilted.save(buf, format="PNG")
         out = _apply_pool_passes(buf.getvalue(), LOW_YIELD,
-                                 Config(ocr_pool_deskew=True))
+                                 Config(ocr_pool_deskew=True, **_NO_PSM11))
         assert seen == [6] and "DESKEWED" in out
 
     def test_no_deskew_on_aligned_page(self, monkeypatch):
@@ -129,7 +144,7 @@ class TestDeskewTrigger:
                             lambda *a, **k: calls.append(1) or "x")
         raw = _png(lambda d: [d.line((20, y, 380, y), fill=0, width=3)
                               for y in range(40, 280, 30)])
-        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_deskew=True))
+        out = _apply_pool_passes(raw, LOW_YIELD, Config(ocr_pool_deskew=True, **_NO_PSM11))
         assert calls == [] and out == LOW_YIELD
 
 

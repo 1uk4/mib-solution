@@ -7,15 +7,16 @@ import pytest
 from v4.config import Config, CONFIG
 
 
-# The exact documented split: 8 booleans ON, 2 OFF, plus the cache path.
+# The exact documented split: 9 booleans ON, 4 OFF, plus the cache path.
 EXPECTED_TRUE = {
     "ocr_sharpen", "user_words", "normalize_values", "reocr_char_whitelist",
     "trust_finding", "upgrade_waived_on_biometric", "fallback_ocr_upgrade",
     "ocr_only_guard",
+    "ocr_pool_psm11",   # accepted 2026-08-03: +0.371 train / +0.898 val
 }
 EXPECTED_FALSE = {"upgrade_unpaid_on_waiver", "defensive_downgrade",
                   "fee_fuzzy_recovery",
-                  "ocr_pool_psm11", "ocr_pool_rotations", "ocr_pool_deskew"}
+                  "ocr_pool_rotations", "ocr_pool_deskew"}
 
 
 class TestDefaults:
@@ -23,12 +24,12 @@ class TestDefaults:
         names = {f.name for f in dataclasses.fields(Config)}
         assert names == EXPECTED_TRUE | EXPECTED_FALSE | {"ocr_cache_dir"}
 
-    def test_eight_booleans_default_true(self):
+    def test_booleans_default_true(self):
         c = Config()
         for name in EXPECTED_TRUE:
             assert getattr(c, name) is True, name
 
-    def test_two_booleans_default_false(self):
+    def test_booleans_default_false(self):
         c = Config()
         for name in EXPECTED_FALSE:
             assert getattr(c, name) is False, name
