@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """L5 — Cross-reference & consolidation.
 
-Consumes L4's typed Signal records, produces the field dict L6 (rules)
-consumes.
+DOES: resolve L4's competing Signals into one value per field —
+highest confidence wins (confidence IS the Field Manual authority
+encoding), source_id as deterministic tiebreak — and record how
+contested each value was. Three products per case:
+    fields          winning values (risk_flags defaults to "none")
+    _source_class   per-field provenance: text | ocr_only | absent —
+                    L7's OCR-only guard input; "absent" is what lets
+                    L7 distinguish extracted-"none" from never-extracted
+    _agreement      per-field {value, n_sources, n_agreeing,
+                    unique_values, has_conflict} — L7's conflict-guard
+                    input, and the reason losing signals still matter
+Also passes ADJUDICATOR_FINDING through as `_finding` for L6's rule #1.
 
-Phase D-1 (this file): pass-through consolidation. Each FIELD_VALUE Signal
-becomes a field entry directly. If multiple signals exist for the same
-key, highest-confidence wins (with source_id as tiebreaker for stability).
-ADJUDICATOR_FINDING is written to `_finding` for V1's rule engine.
-
-Behavior is byte-identical to the previous L5 because Phase D-1's L4 emits
-at most one signal per (type, key) pair from combined text.
-
-Phase D-2/D-3 (later):
-    - Multiple sources per key → group and detect conflicts
-    - Conflict resolution: agreement → high confidence
-                            disagreement → downgrade / route to REVIEW
-    - Source trust weighting: text-stream > OCR
+DOES NOT: judge values (L4 validated them), resolve conflicts by
+routing (L7 decides what a conflict means), or emit anything untraceable
+— every winner's provenance survives in the metadata.
 """
 from __future__ import annotations
 
@@ -88,7 +88,15 @@ def consolidate(bundle: dict, case_id: str) -> dict:
         else:
             fields[key] = ""
             source_class[key] = "absent"
-            agreement[key] = None
+            # Same shape as the populated case so consumers never need a
+            # None-vs-dict fork (guards read .get("has_conflict") either way).
+            agreement[key] = {
+                "value": "",
+                "n_sources": 0,
+                "n_agreeing": 0,
+                "unique_values": [],
+                "has_conflict": False,
+            }
 
     # Adjudicator finding — passed through as internal-only marker for V1 rules
     for s in signals:

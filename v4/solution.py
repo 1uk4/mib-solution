@@ -76,13 +76,13 @@ def predict_case(pdf_path: Path) -> dict:
     adj, c, tag = apply_rules(fields)
     adj, c, tag = apply_policy(fields, adj, c, tag, signals)
 
-    # Assemble schema-valid prediction row
+    # Assemble schema-valid prediction row. (risk_flags needs no special
+    # case: consolidate guarantees it truthy, and the defaults loop would
+    # cover it regardless.)
     row = dict(fields)
     for f in OUTPUT_FIELDS:
         if not row.get(f):
             row[f] = _default_field(f)
-    if not row.get("risk_flags"):
-        row["risk_flags"] = "none"
     row["adjudication"] = adj
     row["confidence"] = c
     row.pop("_finding", None)
@@ -114,7 +114,6 @@ def main(input_dir: str, output_path: str) -> None:
                 pred = {
                     "case_id": pdf.stem,
                     **{k: _default_field(k) for k in OUTPUT_FIELDS},
-                    "risk_flags": "none",
                     "adjudication": "NEEDS_REVIEW",
                     "confidence": conf("FALLBACK_extraction_fail"),
                 }

@@ -192,7 +192,34 @@ char-whitelist re-OCR for format failures.
 output, load-bearing for dev tooling. Census script:
 `v3/dev/analysis/signal_census.py`.
 
-## L5 — consolidate.py (pending)
+## L5 — consolidate.py: claims become one answer each
+
+**Job:** resolve L4's competing Signals per field — highest confidence
+wins (confidence IS the authority encoding), source_id as deterministic
+tiebreak — and record contest metadata. Three products: `fields`
+(values), `_source_class` (text/ocr_only/absent — the OCR-only guard's
+input, and the only place "extracted none" differs from "never
+extracted"), `_agreement` (n_sources/unique_values/has_conflict — the
+conflict guard's input, and why losing signals still matter). Plus the
+`_finding` passthrough (162 packets).
+
+**Census (2026-08-03):** conflicts in 305/1000 packets, dominated by
+applicant_name (196 — OCR name variants; drives no rule); **114 packets
+carry approve-relevant conflicts** (the L7 conflict guard's ceiling).
+Tiebreak decided between *differing* values **6 times in 9,000 fields**
+(0.07%) — all equal-confidence OCR-garble pairs; arbitrary-but-stable is
+acceptable at that rate and now measured. Most fields corroborated by
+2–3 sources. risk_flags `absent` in 768 packets (the defensive-downgrade
+population); fee_status absent in 429 (→ B2-1).
+
+**Review outcome:** three warts fixed — (1) module docstring was a v3
+fossil narrating shipped features as future phases; rewritten to the
+does/does-not contract; (2) unreachable risk_flags double-locks removed
+from solution.py (consolidate guarantees the default; the defaults loop
+covers it regardless); (3) `_agreement` absent-field entries now carry
+the same dict shape as populated ones — no None-vs-dict fork for
+consumers. All output-inert; 141 tests, 27/27 spot parity. Census:
+`v3/dev/analysis/consolidate_census.py`.
 
 ## L6 — rules.py (pending)
 
