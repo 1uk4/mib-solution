@@ -257,6 +257,12 @@ def _extract_text_stream(src: Source) -> str:
     return "\n".join(pieces)
 
 
+# Hang guard, not a budget: the slowest observed pass (~2s, 2x-upscaled
+# letter page) is well under this. A hung Tesseract costs one image, never
+# a packet.
+_TESSERACT_TIMEOUT_S = 15
+
+
 def _tesseract(image_bytes: bytes, psm: int = 6,
                extra_flags: list[str] | None = None) -> str:
     """Single Tesseract invocation. Returns text or empty on failure.
@@ -273,46 +279,40 @@ def _tesseract(image_bytes: bytes, psm: int = 6,
             cmd,
             input=image_bytes,
             capture_output=True,
-            timeout=15,
+            timeout=_TESSERACT_TIMEOUT_S,
         )
         return proc.stdout.decode("utf-8", errors="replace")
     except Exception:
         return ""
 
 
-def _upscale_png(image_bytes: bytes, scale: int) -> bytes | None:
-    """Decode with PIL, upscale, re-encode as PNG. None on failure."""
+def _pil_png(image_bytes: bytes, transform) -> bytes | None:
+    """Decode via PIL, apply transform(img) -> img, re-encode PNG.
+    None on any failure (missing PIL included)."""
     if Image is None:
         return None
     try:
         img = Image.open(io.BytesIO(image_bytes))
         img.load()
-        img = img.resize((img.width * scale, img.height * scale), Image.LANCZOS)
+        img = transform(img)
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         return buf.getvalue()
     except Exception:
         return None
+
+
+def _upscale_png(image_bytes: bytes, scale: int) -> bytes | None:
+    """LANCZOS upscale for the higher-DPI OCR pass."""
+    return _pil_png(image_bytes, lambda im: im.resize(
+        (im.width * scale, im.height * scale), Image.LANCZOS))
 
 
 def _sharpen_png(image_bytes: bytes) -> bytes | None:
-    """Apply unsharp mask sharpen, re-encode as PNG. None on failure.
-
-    Empirical basis: on MIB-000032, sharpen recovered 'Asinax Qommora' where
-    baseline read 'Annax Qormora' — 1 character closer to truth 'Arinax'.
-    Radius=2, percent=150 matches the parameters tested during design.
-    """
-    if Image is None:
-        return None
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        img.load()
-        img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150))
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
-    except Exception:
-        return None
+    """Unsharp mask (radius=2, percent=150) — recovers character-level
+    misreads by boosting edge contrast (Annax→Asinax class)."""
+    return _pil_png(image_bytes, lambda im: im.filter(
+        ImageFilter.UnsharpMask(radius=2, percent=150)))
 
 
 def _ocr_image(image_bytes: bytes, config: Config = CONFIG) -> str:
@@ -349,9 +349,10 @@ def _ocr_image_dual(image_bytes: bytes, config: Config = CONFIG) -> str:
     cached = _cache_get(image_bytes, tag=tag, config=config)
     if cached is not None:
         return cached
-    text_base = _tesseract(image_bytes, psm=6, extra_flags=_user_words_flags(config))
+    uw = _user_words_flags(config)
+    text_base = _tesseract(image_bytes, psm=6, extra_flags=uw)
     upscaled = _upscale_png(image_bytes, scale=2)
-    text_hires = _tesseract(upscaled, psm=3, extra_flags=_user_words_flags(config)) if upscaled else ""
+    text_hires = _tesseract(upscaled, psm=3, extra_flags=uw) if upscaled else ""
     result = text_base + "\n" + text_hires if text_hires else text_base
     _cache_put(image_bytes, result, tag=tag, config=config)
     return result
@@ -371,11 +372,12 @@ def _ocr_image_triple(image_bytes: bytes, config: Config = CONFIG) -> str:
     cached = _cache_get(image_bytes, tag=cache_tag, config=config)
     if cached is not None:
         return cached
-    text_base = _tesseract(image_bytes, psm=6, extra_flags=_user_words_flags(config))
+    uw = _user_words_flags(config)
+    text_base = _tesseract(image_bytes, psm=6, extra_flags=uw)
     upscaled = _upscale_png(image_bytes, scale=2)
-    text_hires = _tesseract(upscaled, psm=3, extra_flags=_user_words_flags(config)) if upscaled else ""
+    text_hires = _tesseract(upscaled, psm=3, extra_flags=uw) if upscaled else ""
     sharpened = _sharpen_png(image_bytes)
-    text_sharp = _tesseract(sharpened, psm=6, extra_flags=_user_words_flags(config)) if sharpened else ""
+    text_sharp = _tesseract(sharpened, psm=6, extra_flags=uw) if sharpened else ""
     parts = [t for t in (text_base, text_hires, text_sharp) if t]
     result = "\n".join(parts)
     _cache_put(image_bytes, result, tag=cache_tag, config=config)
