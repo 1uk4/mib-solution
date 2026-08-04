@@ -134,6 +134,33 @@ catches — mixed-case brackets redaction deliberately ignores);
 `SPONSOR_ATTESTS_RE`'s `[SPONSOR ID BLANK]` alternative: 0 matches
 post-sanitization (vestigial from pre-L3 v1, harmless).
 
+## B2-9 — The per-stream signal tier: 47% of emissions, 0.3% win rate
+
+Census 2026-08-03 (16,960 signals, 6,978 filled fields): per-stream
+signals are the largest emission family (7,997) and win 24 fields —
+**23 of which are exactly the fee_status unknown@0.4 sentinel rescues**
+(sentinel emitted 23×, outvoted 23× — the design works every time), plus
+one applicant_name. Structural cause: combined_text is a superset of
+every stream at conf 1.0, so per-stream can only win where combined
+deliberately under-bids.
+
+Not removable — losing candidates feed L5's `_agreement` (the L7
+conflict guard's input) and corroboration counts. Reframed, not removed:
+the tier is a *metadata and sentinel-rescue* mechanism, not a value
+source. *Counterfactual if simplification is ever wanted:* measure
+emission narrowed to fee_status + conflict-relevant fields.
+
+## B2-10 — Char-whitelist re-OCR: fully shadowed by its bundle-mates
+
+Same census: 2,572 repair invocations, **1** reached Tesseract (0.2 s
+total), **0 repairs succeeded**. The 2026-07-31 sweep's +9.64 was
+measured against the pre-bundle baseline; with user-words + sharpen +
+normalize on, every value re-OCR used to fix arrives valid. Kept as-is
+(inert and free; Rules 2/8): it is *shadowed insurance* that would
+reactivate exactly when upstream OCR degrades — e.g. the container's
+different tesseract (B2-4), the one environment we cannot cheaply
+measure from the host.
+
 ## B2-5 — Guard confidences are shared, not measured per-guard
 
 `ocr_only_downgrade`, `field_conflict`, `missing_required`, and

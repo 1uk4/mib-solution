@@ -143,7 +143,54 @@ to the actual (should_exclude, audit_reason) contract, with measured
 fire rates noted. No threshold or logic changes (Rule 4). Census script:
 `v3/dev/analysis/filter_census.py`.
 
-## L4 — signals.py (pending)
+## L4 — signals.py: documents become claims
+
+**Job:** run the canonical field extractor over trusted content at three
+scopes and emit typed, provenance-carrying, authority-weighted `Signal`
+records, so L5 resolves disagreement instead of racing. ~17 signals per
+packet.
+
+**Three emission tiers:** combined text (conf 1.0 — authoritative;
+cross-stream `Manual correction:` overrides only work merged), per-stream
+and per-image (conf by Field Manual authority level via
+`source_type.classify`: adjudicator note 0.99 → intake 0.90 → biometric
+0.85 → attestation 0.80 → registry 0.75 → unrecognized 0.70). One
+deliberate under-bid: combined `fee_status="unknown"` emits at 0.4 — a
+missing-extraction sentinel that lets a per-source recovery win.
+
+**The extractor's adversarial defenses** (absorbed from v1): name
+precedence Registry > Sponsor-attests > Intake (intake lies in ~17
+cases); fee triangulation from honest Amount/Waiver vs the lying stated
+label (23 cases); visa label-before-vocab-scan; manual corrections trump
+everything. Validation is reject-don't-sanitize; `risk_flags="none"` is
+rejected as evidence (absence ≠ clean).
+
+**Fuzzy recovery ladder** (fires only on strict miss, confidences lose
+all ties): separator-tolerant flags @0.6, digit-lookalike sponsor repair
+@0.6 (shape-only — no known-good list, 10⁴ space vs 864 seen),
+SequenceMatcher label recovery (enum-snap only for Manual-listed enums),
+char-whitelist re-OCR for format failures.
+
+**Census (2026-08-03, key numbers):**
+- Win rates at L5: combined_text 5,589; per_image_strict 1,186;
+  fuzzy_label 172 (the workhorse recovery — 76 home_world); per_stream
+  **24 of 7,997 emitted** (23 = the fee sentinel, which went 23/23);
+  fuzzy_sponsor 4, fuzzy_flag 3 (tiny but verdict-relevant).
+- **Per-stream tier reframed (B2-9):** a metadata + sentinel-rescue
+  mechanism — its losing candidates feed `_agreement`/corroboration —
+  not a value source. Not removable; never again describable as one.
+- **Re-OCR is shadowed insurance (B2-10):** 2,572 invocations, 1
+  Tesseract call, 0 repairs — everything it used to fix arrives valid
+  under the full bundle. Kept: inert, free, and reactivates exactly when
+  upstream OCR degrades (the container scenario).
+- `fields_empty` maps L6's fallback feed: risk_flags empty in 768
+  packets (the defensive-downgrade population), fee_status in 429
+  (→ B2-1's 251-case bucket).
+
+**Review outcome:** unused `level` param dropped from
+`_fuzzy_label_signals`; tag names (`v1_extract_fields`) left — inert to
+output, load-bearing for dev tooling. Census script:
+`v3/dev/analysis/signal_census.py`.
 
 ## L5 — consolidate.py (pending)
 

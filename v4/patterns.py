@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Compiled patterns — every regex and word list the pipeline matches with.
+"""Compiled patterns — the regexes and word lists shared across layers.
+
+Single-consumer patterns stay with their consumer (redaction/illegibility
+regexes in filters/, source-type markers in source_type.py, OCR signal
+regexes in evidence.py) — this module holds what more than one layer reads.
 
 DOES: define (1) PDF structural regexes, (2) injection-marker strings,
 (3) field-label extraction regexes, (4) adjudicator-note regexes, and

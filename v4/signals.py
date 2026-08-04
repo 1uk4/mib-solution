@@ -654,7 +654,6 @@ def _fuzzy_label_signals(
     img_src: Source,
     img_fields: dict,
     conf: float,
-    level: int,
     config: Config,
 ) -> None:
     """Append fuzzy-label Signals for any labeled field the canonical
@@ -840,7 +839,7 @@ def extract_signals(sources: list[Source], config: Config = CONFIG) -> dict:
         # so consolidation still respects source authority. The generic
         # helper is _fuzzy_label_extract in this file.
         _fuzzy_label_signals(
-            signals, img_src, img_fields, conf, level, config,
+            signals, img_src, img_fields, conf, config,
         )
 
 
