@@ -40,6 +40,11 @@ class Config:
     normalize_values: bool = True
     # Char-whitelist re-OCR for structured field format failures.
     reocr_char_whitelist: bool = True
+    # Fuzzy-label recovery for fee_status — OFF pending measurement (B2-1).
+    # fee_status was the one labeled field WITHOUT fuzzy recovery (the
+    # docstring's "dedicated block" never existed); 163 fallback cases are
+    # fee-only-missing. Enum-snapped to paid/waived/unpaid like visa_class.
+    fee_fuzzy_recovery: bool = False
 
     # --- L7 policy ---
     # Adjudicator-finding trust bypass. Evidence precedence #1 per the Field

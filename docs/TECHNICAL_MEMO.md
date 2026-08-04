@@ -240,11 +240,17 @@ finding trump rescues 84 would-be fallback cases and 76 would-be R_R1;
 49 packets have multiple deny conditions true — order shifts tag credit
 only (all 0.96–0.99), so the deny block is order-insensitive in effect.
 
-**FALLBACK decomposition (B2-1 revised):** the missing-field axis does
-NOT split the bucket (35/28/26% vs pooled 32%). Instead: 65% of the
-bucket is fee-only-missing and 44% of those are truth-APPROVED — the
-improvement axis is fee-extraction recovery, not confidence splitting.
-Visa-missing skews DENIED (43%).
+**FALLBACK decomposition (B2-1 revised, then CLOSED):** the
+missing-field axis does NOT split the bucket (35/28/26% vs pooled 32%).
+65% is fee-only-missing, 44% of those truth-APPROVED — so fee recovery
+was built (`fee_fuzzy_recovery`, gated) and measured end-to-end: 28
+recoveries, zero verdict changes, +0.06 total but train +0.105 /
+val −0.090 (the overfit pattern), and the root-cause diagnostic showed
+**83% of fee-empty cases carry no fee text anywhere** — the evidence is
+not in the packets. Flag stays OFF; bucket confirmed as the eval's
+designed extraction-failure cohort, honestly priced at 0.34. Bonus kept:
+the fuzzy-label sweep gained an exact rolling-prescreen optimization
+(~33×, equivalence-tested 952/952) benefiting all eight fields.
 
 **Review outcome:** no code changes — the cleanest layer. Census:
 `v3/dev/analysis/rules_census.py`.

@@ -30,12 +30,22 @@ supported along this axis.
 What the decomposition found instead: **65% of the bucket is
 fee-only-missing, and 44% of those are truth-APPROVED** — approvable
 packets whose fee receipt didn't extract while everything else read
-fine. The value axis is fee-extraction recovery (cases then flow to real
-rules), not confidence splitting. Inverse signal: visa-missing packets
-skew DENIED (43%). Remaining split candidates if ever revisited:
-OCR-signal presence, illegibility bit, image count — not missing-field.
+fine. Inverse signal: visa-missing packets skew DENIED (43%).
 
-*Where:* `v4/signals.py` fee extraction (recovery), not `v4/rules.py`.
+**CLOSED 2026-08-03 — measured end-to-end and structurally
+unrecoverable.** Built `fee_fuzzy_recovery` (fee_status joins the fuzzy
+label ladder; it was the one labeled field without recovery — the v3
+docstring's "dedicated block" never existed). Full measurement
+(`v3/dev/analysis/fee_recovery_measure.py`): 28 fees recovered, ZERO
+verdicts changed (+0.12 extraction, −0.05 calibration, +0.06 total);
+split: train +0.105 / **val −0.090** — the overfit pattern the split
+discipline exists to catch. Root cause diagnostic: of 354 fee-empty
+cases, **83% contain no fee text anywhere in trusted content** — the
+evidence is not in the packet (Pitfall 9's shape; this is the eval's
+designed extraction-failure cohort, the fee-side sibling of Cohort B).
+**Flag stays default-OFF**, kept as a documented measured experiment.
+The fallback bucket's 0.34 is the honest confidence for a genuinely
+undecidable population.
 
 ## B2-2 — Crash path reuses extraction-failure confidence
 

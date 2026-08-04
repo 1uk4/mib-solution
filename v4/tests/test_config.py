@@ -13,7 +13,8 @@ EXPECTED_TRUE = {
     "trust_finding", "upgrade_waived_on_biometric", "fallback_ocr_upgrade",
     "ocr_only_guard",
 }
-EXPECTED_FALSE = {"upgrade_unpaid_on_waiver", "defensive_downgrade"}
+EXPECTED_FALSE = {"upgrade_unpaid_on_waiver", "defensive_downgrade",
+                  "fee_fuzzy_recovery"}
 
 
 class TestDefaults:

@@ -529,12 +529,52 @@ def _fuzzy_label_extract(
     text_lo = text.lower()
 
     # Locate best label position — sweep windows sized near |label|.
+    #
+    # The prescreen is exact: quick_ratio() equals 2*M/(|window|+|label|)
+    # where M is the character-multiset intersection, an UPPER BOUND on
+    # ratio(). M is maintained incrementally as the window slides (O(1)
+    # per position), so full ratio() runs only on windows whose bound
+    # clears both the threshold and the running best — a window pruned by
+    # the bound can never change the result. (2026-08-03: this sweep
+    # dominated L4 runtime once fee_status joined the ladder; the rolling
+    # prescreen cuts it ~50x, output-identical — equivalence-tested.)
     best_score = 0.0
     best_end = -1
+    sm = SequenceMatcher(None, "", label_lo)
+    lcount: dict[str, int] = {}
+    for ch in label_lo:
+        lcount[ch] = lcount.get(ch, 0) + 1
+    n = len(text_lo)
     for wsize in range(max(3, llen - 2), llen + 3):
-        for i in range(0, len(text) - wsize + 1):
-            window = text_lo[i:i + wsize]
-            score = SequenceMatcher(None, window, label_lo).ratio()
+        if wsize > n:
+            continue
+        denom = wsize + llen
+        # Initialize window counts + intersection for text_lo[0:wsize]
+        wcount: dict[str, int] = {}
+        M = 0
+        for ch in text_lo[:wsize]:
+            c = wcount.get(ch, 0) + 1
+            wcount[ch] = c
+            if c <= lcount.get(ch, 0):
+                M += 1
+        for i in range(0, n - wsize + 1):
+            if i > 0:
+                out_c = text_lo[i - 1]
+                in_c = text_lo[i + wsize - 1]
+                if out_c != in_c:
+                    c = wcount[out_c]
+                    if c <= lcount.get(out_c, 0):
+                        M -= 1
+                    wcount[out_c] = c - 1
+                    c = wcount.get(in_c, 0) + 1
+                    wcount[in_c] = c
+                    if c <= lcount.get(in_c, 0):
+                        M += 1
+            q = 2.0 * M / denom
+            if q < label_threshold or q <= best_score:
+                continue
+            sm.set_seq1(text_lo[i:i + wsize])
+            score = sm.ratio()
             if score > best_score:
                 best_score = score
                 best_end = i + wsize
@@ -664,10 +704,15 @@ def _fuzzy_label_signals(
     returned empty or "unknown" for that key — no point competing with
     a definitive per-image value.
 
-    Fee_status has its own dedicated block above (special empty/unknown
-    condition) so it's not repeated here.
+    fee_status historically had NO fuzzy recovery (a v3 docstring
+    referenced a "dedicated block" that never existed — the fossil was
+    found 2026-08-03 via the L6 fallback census). Recovery is gated on
+    config.fee_fuzzy_recovery pending measurement.
     """
-    for key, label, enum in _FUZZY_LABEL_CONFIG:
+    entries = _FUZZY_LABEL_CONFIG
+    if config.fee_fuzzy_recovery:
+        entries = entries + [("fee_status", "Fee Status", _FEE_ENUM)]
+    for key, label, enum in entries:
         v1_value = img_fields.get(key, "")
         if v1_value and v1_value.strip().lower() not in ("", "unknown"):
             continue  # got a definitive value; don't add a fuzzy signal
