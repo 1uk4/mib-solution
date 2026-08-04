@@ -107,7 +107,10 @@ def guard_missing_required(ctx: PolicyContext) -> Verdict | None:
 
     Note: this rule assumes no enumerated home list — it fires purely on
     ABSENCE of extraction, not on the value. Works for unseen homes and
-    sponsors that eval may introduce."""
+    sponsors that eval may introduce.
+
+    Measured 2026-08-03: fully shadowed on training — 10 would-fires, all
+    preempted by an earlier guard. Kept as depth (free, generalizes)."""
     def _missing(key: str) -> bool:
         v = (ctx.fields.get(key) or "").strip().lower()
         return v in ("", "unknown")

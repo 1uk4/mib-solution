@@ -249,4 +249,46 @@ Visa-missing skews DENIED (43%).
 **Review outcome:** no code changes — the cleanest layer. Census:
 `v3/dev/analysis/rules_census.py`.
 
-## L7 — policy/ (pending)
+## L7 — policy/: the last word
+
+**Job:** adjust L6's verdict using evidence the rule chain can't see —
+raw image OCR, biometric slips, provenance, agreement metadata. Three
+stage families with load-bearing sequencing: upgrades (better evidence
+overturns; a firing upgrade exits hard, skipping guards), the bypass
+(human finding exempts guards — an exemption, never a promotion), five
+guards (demote APPROVED→REVIEW only; L7 cannot manufacture a DENIED
+from suspicion — denial requires positive evidence via the override).
+
+**Census (2026-08-03), every loop closed:**
+- Upgrades: fallback-OCR 27 fires — 13 R→D all D-truth (the claimed +14
+  D→D within one), 0 A-truth = 0 cat-FA exposure; biometric 8 fires
+  (6 A / 2 R — the registry's numbers exactly); unpaid-waiver 0 (off).
+- Bypass: 33/33 adjudicator approvals, 100%.
+- Guards: of 190 guarded approvals, 48 demoted, 142 untouched. The
+  untouched D-truth count is **15 — exactly the reported cat FAs**, the
+  population the (off) defensive downgrade targets.
+- Per-guard: risk_override 10/10 correct (100%); ocr_only 36 first-fires
+  at 31% (solo: 21 @ 29% — Pitfall 5's number, finally decomposed: 15 of
+  36 fires are co-fire-redundant); field_conflict 2 first-fires (both
+  correct; 114-packet ceiling mostly lives on non-approved verdicts);
+  **missing_required: 0 first-fires — fully shadowed**, kept as free
+  generalizing depth (docstring updated).
+
+**Review outcome:** one honesty note added to the shadowed guard; no
+logic changes. The stage decomposition (P5) is what made independent
+per-stage evaluation — and this census — possible. Census:
+`v3/dev/analysis/policy_census.py`.
+
+---
+
+## Review series: complete
+
+All seven layers walked, measured, and documented (L1 33412c3, L2
+a01acea/f798aae, L3 79084e3, L4 714493a, L5 56cb461, L6 cd841b7, L7
+below). Recurring pattern: each layer carried at least one component
+whose description had drifted from its measured behavior — brightness
+gates (L1), sharpen's value channel (L2), the placeholder double-lock
+(L3), the per-stream tier and re-OCR (L4), the phase-roadmap fossil
+(L5), the fallback-split hypothesis (L6), the shadowed guard (L7). All
+now reconciled; behavior byte-identical throughout (spot parity at every
+step; full-set gates pending).
