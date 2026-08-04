@@ -1,0 +1,416 @@
+{
+  "sample_packets": 120,
+  "doc_images": 251,
+  "total_fields": 1080,
+  "configs": {
+    "C0": {
+      "truth_matched_fields": 847,
+      "delta_vs_C0": 0,
+      "fields_differing_from_C0": 0,
+      "cases_differing_from_C0": 0,
+      "example_diffs": []
+    },
+    "ORDER_REV": {
+      "truth_matched_fields": 844,
+      "delta_vs_C0": -3,
+      "fields_differing_from_C0": 16,
+      "cases_differing_from_C0": 10,
+      "example_diffs": [
+        [
+          "MIB-000142",
+          "declared_purpose",
+          "cultural exchange",
+          ""
+        ],
+        [
+          "MIB-000146",
+          "arrival_date",
+          "2028-03-28",
+          "2026-03-25"
+        ],
+        [
+          "MIB-000189",
+          "declared_purpose",
+          "archive audit ice",
+          "archive audit i"
+        ],
+        [
+          "MIB-000243",
+          "species_code",
+          "AQUARIAN_MA\u2018T**",
+          "AQUARIAN MAS T= )"
+        ],
+        [
+          "MIB-000243",
+          "home_world",
+          "Barnare-c",
+          "Bamard-e"
+        ],
+        [
+          "MIB-000492",
+          "species_code",
+          "=.",
+          "~-"
+        ],
+        [
+          "MIB-000506",
+          "declared_purpose",
+          "medical consult",
+          ""
+        ],
+        [
+          "MIB-000625",
+          "applicant_name",
+          "Qorzam Xanix PASSPORT IMAGE",
+          "Qorzam Xanix"
+        ],
+        [
+          "MIB-000625",
+          "sponsor_id",
+          "SPN-7182",
+          "SPN-7162"
+        ],
+        [
+          "MIB-000866",
+          "applicant_name",
+          "Orimora Qorzam",
+          "Orimara Qorzam"
+        ]
+      ]
+    },
+    "ORDER_HFIRST": {
+      "truth_matched_fields": 850,
+      "delta_vs_C0": 3,
+      "fields_differing_from_C0": 9,
+      "cases_differing_from_C0": 7,
+      "example_diffs": [
+        [
+          "MIB-000189",
+          "declared_purpose",
+          "archive audit ice",
+          "archive audit"
+        ],
+        [
+          "MIB-000625",
+          "applicant_name",
+          "Qorzam Xanix PASSPORT IMAGE",
+          "Qorzam Xanix"
+        ],
+        [
+          "MIB-000800",
+          "declared_purpose",
+          "",
+          "field repair"
+        ],
+        [
+          "MIB-000810",
+          "declared_purpose",
+          "",
+          "reactor maintenance"
+        ],
+        [
+          "MIB-000924",
+          "applicant_name",
+          "Mirazam Zatari",
+          "Mirazarn Zatari"
+        ],
+        [
+          "MIB-000924",
+          "species_code",
+          "&",
+          "4"
+        ],
+        [
+          "MIB-000924",
+          "home_world",
+          "Ba i",
+          "Ba"
+        ],
+        [
+          "MIB-000975",
+          "declared_purpose",
+          "",
+          "arpromaue"
+        ],
+        [
+          "MIB-000977",
+          "sponsor_id",
+          "SPN-6503",
+          "SPN-8503"
+        ]
+      ]
+    },
+    "SCALE_15": {
+      "truth_matched_fields": 845,
+      "delta_vs_C0": -2,
+      "fields_differing_from_C0": 17,
+      "cases_differing_from_C0": 12,
+      "example_diffs": [
+        [
+          "MIB-000012",
+          "home_world",
+          "",
+          "Kepler-186f"
+        ],
+        [
+          "MIB-000012",
+          "arrival_date",
+          "",
+          "2026-07-07"
+        ],
+        [
+          "MIB-000142",
+          "home_world",
+          "Bamard-c i nai",
+          "Bamard-c"
+        ],
+        [
+          "MIB-000237",
+          "sponsor_id",
+          "SPN-0007",
+          "SPN-5751"
+        ],
+        [
+          "MIB-000243",
+          "species_code",
+          "AQUARIAN_MA\u2018T**",
+          "AQUARIAN_MA ATS"
+        ],
+        [
+          "MIB-000243",
+          "home_world",
+          "Barnare-c",
+          "Bamard-c"
+        ],
+        [
+          "MIB-000383",
+          "home_world",
+          "Mars Dome-7",
+          ""
+        ],
+        [
+          "MIB-000479",
+          "species_code",
+          "ORION_GRAYS",
+          "ORION_GRAY:"
+        ],
+        [
+          "MIB-000479",
+          "declared_purpose",
+          "reactor maintenance",
+          "reactor nance"
+        ],
+        [
+          "MIB-000492",
+          "home_world",
+          "tt",
+          ""
+        ]
+      ]
+    },
+    "NO_UPSCALE": {
+      "truth_matched_fields": 826,
+      "delta_vs_C0": -21,
+      "fields_differing_from_C0": 31,
+      "cases_differing_from_C0": 15,
+      "example_diffs": [
+        [
+          "MIB-000142",
+          "declared_purpose",
+          "cultural exchange",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "risk_flags",
+          "identity_conflict",
+          "none"
+        ],
+        [
+          "MIB-000237",
+          "sponsor_id",
+          "SPN-0007",
+          "SPN-5751"
+        ],
+        [
+          "MIB-000237",
+          "arrival_date",
+          "2026-02-08",
+          ""
+        ],
+        [
+          "MIB-000243",
+          "species_code",
+          "AQUARIAN_MA\u2018T**",
+          "AQUARIAN MAS T= )"
+        ],
+        [
+          "MIB-000243",
+          "home_world",
+          "Barnare-c",
+          "Bamard-e"
+        ],
+        [
+          "MIB-000383",
+          "home_world",
+          "Mars Dome-7",
+          ""
+        ],
+        [
+          "MIB-000427",
+          "sponsor_id",
+          "SPN-1687",
+          ""
+        ],
+        [
+          "MIB-000479",
+          "applicant_name",
+          "Nexix Veedane",
+          ""
+        ],
+        [
+          "MIB-000479",
+          "species_code",
+          "ORION_GRAYS",
+          ""
+        ]
+      ]
+    },
+    "DUAL_EQUIV": {
+      "truth_matched_fields": 851,
+      "delta_vs_C0": 4,
+      "fields_differing_from_C0": 14,
+      "cases_differing_from_C0": 9,
+      "example_diffs": [
+        [
+          "MIB-000012",
+          "home_world",
+          "",
+          "Kepler-186f"
+        ],
+        [
+          "MIB-000012",
+          "arrival_date",
+          "",
+          "2026-07-07"
+        ],
+        [
+          "MIB-000073",
+          "fee_status",
+          "waived",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "applicant_name",
+          "Zavoss Solquell",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "home_world",
+          "Bamard-c i nai",
+          "Barnard-c"
+        ],
+        [
+          "MIB-000148",
+          "home_world",
+          "k\u00e9",
+          "Visa Clase: XW.2"
+        ],
+        [
+          "MIB-000148",
+          "declared_purpose",
+          "",
+          "transit"
+        ],
+        [
+          "MIB-000415",
+          "fee_status",
+          "paid",
+          ""
+        ],
+        [
+          "MIB-000427",
+          "species_code",
+          "",
+          "JOVIAN_GASFORM"
+        ],
+        [
+          "MIB-000427",
+          "arrival_date",
+          "",
+          "2026-04-14"
+        ]
+      ]
+    },
+    "BASE_ONLY": {
+      "truth_matched_fields": 816,
+      "delta_vs_C0": -31,
+      "fields_differing_from_C0": 49,
+      "cases_differing_from_C0": 23,
+      "example_diffs": [
+        [
+          "MIB-000012",
+          "species_code",
+          "ALPHA_DRACONIAN",
+          ""
+        ],
+        [
+          "MIB-000073",
+          "fee_status",
+          "waived",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "applicant_name",
+          "Zavoss Solquell",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "home_world",
+          "Bamard-c i nai",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "declared_purpose",
+          "cultural exchange",
+          ""
+        ],
+        [
+          "MIB-000142",
+          "risk_flags",
+          "identity_conflict",
+          "none"
+        ],
+        [
+          "MIB-000146",
+          "species_code",
+          "AQUARIAN_MANTIS",
+          ""
+        ],
+        [
+          "MIB-000148",
+          "home_world",
+          "k\u00e9",
+          "Visa Clase: XW.2"
+        ],
+        [
+          "MIB-000148",
+          "declared_purpose",
+          "",
+          "transit"
+        ],
+        [
+          "MIB-000237",
+          "home_world",
+          "Proxima-b",
+          ""
+        ]
+      ]
+    }
+  }
+}

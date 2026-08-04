@@ -93,6 +93,29 @@ hypothetical dark ≥800px photo now gets triple-pass instead of single
 runtime headroom is 2×. Verified training-identical: the removed branches
 had zero fires, mini-parity clean.
 
+## B2-7 — OCR pass composition, measured at pass granularity (2026-08-03)
+
+120-packet composition experiment (passes OCR'd separately, pipeline
+replayed per composition, fields scored vs truth; n=1,080 field slots).
+Complements the 2026-07-31 bundle sweep, which measured features at
+full-score granularity:
+
+- **Union order matters per-case but is net-neutral**: reordering flips
+  9–16 fields, net within ±3 (noise). Baseline-first stays — now a
+  measured choice, not an inherited accident.
+- **The 2× upscale pass is the workhorse**: removing it costs −21 fields.
+  **1.5× retains almost all value** (−2 vs 2×) at ~44% less upscale
+  compute — the pressure-relief lever if eval runtime ever binds.
+- **Sharpen's extraction contribution is ≈ 0 (−4±noise)** — its measured
+  +10.27 total (RULE_AUDIT 2026-07-31) was classification-side: readable
+  risk stems feeding the L7 OCR-signal path, plus cat FA 22→15. The two
+  measurements compose: sharpen buys evidence, not field values.
+
+*Counterfactual queued:* full-score run with `Config(ocr_sharpen=False)`
+(the retained DUAL insurance path) to decompose sharpen's classification
+value directly. No code change this phase — every variant is ≤ noise or
+a lever we don't need; parity preserved.
+
 ## B2-5 — Guard confidences are shared, not measured per-guard
 
 `ocr_only_downgrade`, `field_conflict`, `missing_required`, and
