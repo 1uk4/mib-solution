@@ -12,7 +12,7 @@ cd "$( dirname "${BASH_SOURCE[0]}" )"
 MODE="${1:?usage: parity.sh native|docker [predictions.jsonl]}"
 case "$MODE" in
   native)
-    GOLDEN="golden/native-92eb104-seed42-n1000.jsonl"
+    GOLDEN="golden/native-f87a3c6-psm11-seed42-n1000.jsonl"
     DEFAULT="$(ls -td /tmp/mib-dev-runs/*/ 2>/dev/null | head -1)predictions.jsonl"
     ;;
   docker)
